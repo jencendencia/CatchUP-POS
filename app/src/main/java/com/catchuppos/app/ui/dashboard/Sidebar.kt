@@ -1,15 +1,17 @@
 package com.catchuppos.app.ui.dashboard
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -18,6 +20,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.catchuppos.app.R
@@ -43,11 +47,15 @@ fun Sidebar(
     onNavItemClick: (NavItem) -> Unit = {},
     onLogout: () -> Unit = {}
 ) {
+    var isCollapsed by remember { mutableStateOf(false) }
+    val sidebarWidth = if (isCollapsed) 72.dp else 240.dp
+
     Box(
         modifier = Modifier
-            .width(240.dp)
+            .width(sidebarWidth)
             .fillMaxHeight()
             .background(Color.Black)
+            .animateContentSize()
     ) {
         Column(
             modifier = Modifier
@@ -56,23 +64,53 @@ fun Sidebar(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Logo
-            Image(
-                painter = painterResource(id = R.drawable.logo),
-                contentDescription = "CatchUP POS Logo",
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .fillMaxWidth()
-                    .heightIn(max = 200.dp),
-                contentScale = ContentScale.Fit
-            )
+            if (!isCollapsed) {
+                Image(
+                    painter = painterResource(id = R.drawable.logo),
+                    contentDescription = "CatchUP POS Logo",
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .fillMaxWidth()
+                        .heightIn(max = 200.dp),
+                    contentScale = ContentScale.Fit
+                )
+            } else {
+                Image(
+                    painter = painterResource(id = R.drawable.logo),
+                    contentDescription = "CatchUP POS Logo",
+                    modifier = Modifier
+                        .size(40.dp)
+                        .padding(4.dp),
+                    contentScale = ContentScale.Fit
+                )
+            }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Collapse/Expand toggle
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(DarkCard)
+                    .clickable { isCollapsed = !isCollapsed },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isCollapsed) Icons.Default.ChevronRight else Icons.Default.ChevronLeft,
+                    contentDescription = if (isCollapsed) "Expand" else "Collapse",
+                    tint = TextMuted,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Divider
             HorizontalDivider(
                 color = DarkBorder,
                 thickness = 1.dp,
-                modifier = Modifier.padding(horizontal = 20.dp)
+                modifier = Modifier.padding(horizontal = if (isCollapsed) 8.dp else 20.dp)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -82,7 +120,7 @@ fun Sidebar(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = if (isCollapsed) 8.dp else 12.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 NavItem.entries.forEach { item ->
@@ -90,6 +128,7 @@ fun Sidebar(
                     NavItemRow(
                         item = item,
                         isActive = isActive,
+                        isCollapsed = isCollapsed,
                         onClick = { onNavItemClick(item) }
                     )
                 }
@@ -99,7 +138,7 @@ fun Sidebar(
             HorizontalDivider(
                 color = DarkBorder,
                 thickness = 1.dp,
-                modifier = Modifier.padding(horizontal = 20.dp)
+                modifier = Modifier.padding(horizontal = if (isCollapsed) 8.dp else 20.dp)
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -108,12 +147,15 @@ fun Sidebar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
+                    .padding(horizontal = if (isCollapsed) 8.dp else 12.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .clickable { onLogout() }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(
+                        horizontal = if (isCollapsed) 0.dp else 16.dp,
+                        vertical = 14.dp
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = if (isCollapsed) Arrangement.Center else Arrangement.spacedBy(12.dp)
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Logout,
@@ -121,13 +163,17 @@ fun Sidebar(
                     tint = MutedRed,
                     modifier = Modifier.size(20.dp)
                 )
-                Text(
-                    text = "Log Out",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MutedRed,
-                    fontWeight = FontWeight.SemiBold
-                )
+                if (!isCollapsed) {
+                    Text(
+                        text = "Log Out",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MutedRed,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
         }
     }
 }
@@ -136,6 +182,7 @@ fun Sidebar(
 private fun NavItemRow(
     item: NavItem,
     isActive: Boolean,
+    isCollapsed: Boolean,
     onClick: () -> Unit
 ) {
     Row(
@@ -148,7 +195,8 @@ private fun NavItemRow(
             )
             .clickable { onClick() }
             .padding(start = if (isActive) 3.dp else 0.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (isCollapsed) Arrangement.Center else Arrangement.Start
     ) {
         // Active indicator bar
         if (isActive) {
@@ -167,13 +215,13 @@ private fun NavItemRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
-                    start = if (isActive) 13.dp else 16.dp,
-                    end = 16.dp,
+                    start = if (isActive) 13.dp else if (isCollapsed) 0.dp else 16.dp,
+                    end = if (isCollapsed) 0.dp else 16.dp,
                     top = 13.dp,
                     bottom = 13.dp
                 ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = if (isCollapsed) Arrangement.Center else Arrangement.spacedBy(12.dp)
         ) {
             Icon(
                 imageVector = if (isActive) item.activeIcon else item.inactiveIcon,
@@ -181,12 +229,14 @@ private fun NavItemRow(
                 tint = if (isActive) OrangeAccent else NavInactiveText,
                 modifier = Modifier.size(20.dp)
             )
-            Text(
-                text = item.label,
-                style = MaterialTheme.typography.labelLarge,
-                color = if (isActive) OrangeAccent else NavInactiveText,
-                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium
-            )
+            if (!isCollapsed) {
+                Text(
+                    text = item.label,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (isActive) OrangeAccent else NavInactiveText,
+                    fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium
+                )
+            }
         }
     }
 }
