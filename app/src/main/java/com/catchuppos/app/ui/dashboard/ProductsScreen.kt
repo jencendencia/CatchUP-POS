@@ -70,6 +70,18 @@ enum class ProductSection(val displayName: String) {
 
 // --- Mapper ---
 
+private fun parseJsonList(json: String): List<String> {
+    return try {
+        json.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotBlank() }
+    } catch (e: Exception) {
+        emptyList()
+    }
+}
+
+private fun toJsonArray(list: List<String>): String {
+    return "[${list.joinToString(",") { "\"$it\"" }}]"
+}
+
 private fun ProductEntity.toUiProduct(): Product {
     val category = when (category) {
         "Coffee" -> ProductCategory.COFFEE
@@ -989,6 +1001,381 @@ private fun AddedItemsChips(items: List<String>) {
 }
 
 // ════════════════════════════════════════════════════════════════════
+// Size Selection Dialog
+// ════════════════════════════════════════════════════════════════════
+
+private val defaultSizes = listOf("12oz", "16oz", "22oz", "Large")
+
+@Composable
+private fun SizeSelectionDialog(
+    selectedSizes: List<String>,
+    onSizesSelected: (List<String>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var customSizeInput by remember { mutableStateOf("") }
+    var tempSelected by remember { mutableStateOf(selectedSizes.toMutableList()) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .widthIn(min = 380.dp, max = 420.dp)
+                .wrapContentHeight(),
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xFF1A1A1A),
+            tonalElevation = 0.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Select Sizes",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = TextWhite,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Tap to select sizes for this product",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = TextGray, modifier = Modifier.size(20.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Predefined size options
+                Text(
+                    text = "PREDEFINED SIZES",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextMuted,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    defaultSizes.forEach { size ->
+                        val isSelected = size in tempSelected
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    tempSelected = if (isSelected) tempSelected.toMutableList().apply { remove(size) }
+                                    else tempSelected + size
+                                },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) OrangeAccent else DarkCard,
+                            border = if (isSelected) null else BorderStroke(1.dp, DarkBorder)
+                        ) {
+                            Text(
+                                text = size,
+                                modifier = Modifier.padding(vertical = 10.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = if (isSelected) TextWhite else TextMuted,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Add custom size
+                Text(
+                    text = "ADD CUSTOM SIZE",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextMuted,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = customSizeInput,
+                        onValueChange = { customSizeInput = it },
+                        placeholder = { Text("e.g. 32oz, Extra Large", color = InputPlaceholder) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true,
+                        colors = formFieldColors()
+                    )
+                    Button(
+                        onClick = {
+                            if (customSizeInput.isNotBlank() && customSizeInput !in tempSelected) {
+                                tempSelected = tempSelected + customSizeInput.trim()
+                                customSizeInput = ""
+                            }
+                        },
+                        modifier = Modifier.height(48.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent, contentColor = TextWhite),
+                        enabled = customSizeInput.isNotBlank()
+                    ) {
+                        Text("Add", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Selected sizes display
+                if (tempSelected.isNotEmpty()) {
+                    Text(
+                        text = "SELECTED (${tempSelected.size})",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        tempSelected.forEach { size ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = OrangeAccent.copy(alpha = 0.15f),
+                                border = BorderStroke(1.dp, OrangeAccent)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(text = size, style = MaterialTheme.typography.labelSmall, color = OrangeAccent, fontWeight = FontWeight.SemiBold)
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Remove",
+                                        tint = OrangeAccent,
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .clickable { tempSelected = tempSelected.toMutableList().apply { remove(size) } }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    TextButton(onClick = {
+                        onSizesSelected(tempSelected)
+                        onDismiss()
+                    }) {
+                        Text("Done", color = OrangeAccent, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Add-on Selection Dialog
+// ════════════════════════════════════════════════════════════════════
+
+private val defaultAddOns = listOf("Extra Shot", "Pearl", "Cheese", "Whipped Cream", "Vanilla Syrup", "Caramel Syrup")
+
+@Composable
+private fun AddOnSelectionDialog(
+    selectedAddOns: List<String>,
+    onAddOnsSelected: (List<String>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var customAddOnInput by remember { mutableStateOf("") }
+    var tempSelected by remember { mutableStateOf(selectedAddOns.toMutableList()) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .widthIn(min = 380.dp, max = 420.dp)
+                .wrapContentHeight(),
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xFF1A1A1A),
+            tonalElevation = 0.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Select Add-ons", style = MaterialTheme.typography.titleLarge, color = TextWhite, fontWeight = FontWeight.Bold)
+                        Text("Tap to select add-ons for this product", style = MaterialTheme.typography.bodySmall, color = TextMuted, modifier = Modifier.padding(top = 2.dp))
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = TextGray, modifier = Modifier.size(20.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("PREDEFINED ADD-ONS", style = MaterialTheme.typography.labelSmall, color = TextMuted, letterSpacing = 1.sp, modifier = Modifier.padding(bottom = 8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    defaultAddOns.take(3).forEach { addOn ->
+                        val isSelected = addOn in tempSelected
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    tempSelected = if (isSelected) tempSelected.toMutableList().apply { remove(addOn) }
+                                    else tempSelected + addOn
+                                },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) Color(0xFF9C27B0) else DarkCard,
+                            border = if (isSelected) null else BorderStroke(1.dp, DarkBorder)
+                        ) {
+                            Text(
+                                text = addOn,
+                                modifier = Modifier.padding(vertical = 10.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isSelected) TextWhite else TextMuted,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    defaultAddOns.drop(3).forEach { addOn ->
+                        val isSelected = addOn in tempSelected
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    tempSelected = if (isSelected) tempSelected.toMutableList().apply { remove(addOn) }
+                                    else tempSelected + addOn
+                                },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) Color(0xFF9C27B0) else DarkCard,
+                            border = if (isSelected) null else BorderStroke(1.dp, DarkBorder)
+                        ) {
+                            Text(
+                                text = addOn,
+                                modifier = Modifier.padding(vertical = 10.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isSelected) TextWhite else TextMuted,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text("ADD CUSTOM ADD-ON", style = MaterialTheme.typography.labelSmall, color = TextMuted, letterSpacing = 1.sp, modifier = Modifier.padding(bottom = 8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = customAddOnInput,
+                        onValueChange = { customAddOnInput = it },
+                        placeholder = { Text("e.g. Oat Milk, Honey", color = InputPlaceholder) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true,
+                        colors = formFieldColors()
+                    )
+                    Button(
+                        onClick = {
+                            if (customAddOnInput.isNotBlank() && customAddOnInput !in tempSelected) {
+                                tempSelected = tempSelected + customAddOnInput.trim()
+                                customAddOnInput = ""
+                            }
+                        },
+                        modifier = Modifier.height(48.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0), contentColor = TextWhite),
+                        enabled = customAddOnInput.isNotBlank()
+                    ) {
+                        Text("Add", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (tempSelected.isNotEmpty()) {
+                    Text("SELECTED (${tempSelected.size})", style = MaterialTheme.typography.labelSmall, color = TextMuted, letterSpacing = 1.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        tempSelected.forEach { addOn ->
+                            Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF9C27B0).copy(alpha = 0.15f), border = BorderStroke(1.dp, Color(0xFF9C27B0))) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(addOn, style = MaterialTheme.typography.labelSmall, color = Color(0xFF9C27B0), fontWeight = FontWeight.SemiBold)
+                                    Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color(0xFF9C27B0), modifier = Modifier.size(14.dp).clickable { tempSelected = tempSelected.toMutableList().apply { remove(addOn) } })
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    TextButton(onClick = {
+                        onAddOnsSelected(tempSelected)
+                        onDismiss()
+                    }) {
+                        Text("Done", color = OrangeAccent, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
 // Add Product Screen
 // ════════════════════════════════════════════════════════════════════
 
@@ -1029,8 +1416,16 @@ private fun AddProductScreen(
     var showCategoryDialog by remember { mutableStateOf(false) }
     var unitExpanded by remember { mutableStateOf(false) }
 
-    var sizes by remember { mutableStateOf(listOf<String>()) }
-    var addOns by remember { mutableStateOf(listOf<String>()) }
+    var sizes by remember(editingProduct) {
+        mutableStateOf(
+            editingProduct?.sizesJson?.let { parseJsonList(it) } ?: emptyList()
+        )
+    }
+    var addOns by remember(editingProduct) {
+        mutableStateOf(
+            editingProduct?.addOnsJson?.let { parseJsonList(it) } ?: emptyList()
+        )
+    }
     var showSizeDialog by remember { mutableStateOf(false) }
     var showAddOnDialog by remember { mutableStateOf(false) }
 
@@ -1252,7 +1647,7 @@ private fun AddProductScreen(
                     FormFieldLabel(label = "Size / Variant")
                     TextButton(onClick = { showSizeDialog = true }) {
                         Text(
-                            text = "+ Add Size",
+                            text = if (sizes.isEmpty()) "+ Add Size" else "Edit Sizes (${sizes.size})",
                             color = OrangeAccent,
                             fontWeight = FontWeight.SemiBold,
                             style = MaterialTheme.typography.labelLarge
@@ -1271,12 +1666,9 @@ private fun AddProductScreen(
 
                     // Size Dialog
                     if (showSizeDialog) {
-                        AddListItemDialog(
-                            title = "Add Size / Variant",
-                            placeholder = "e.g. 12oz, 16oz, Large",
-                            existingItems = sizes,
-                            onAddItem = { sizes = sizes + it },
-                            onRemoveItem = { index -> sizes = sizes.filterIndexed { i, _ -> i != index } },
+                        SizeSelectionDialog(
+                            selectedSizes = sizes,
+                            onSizesSelected = { sizes = it },
                             onDismiss = { showSizeDialog = false }
                         )
                     }
@@ -1287,7 +1679,7 @@ private fun AddProductScreen(
                     FormFieldLabel(label = "Add-ons")
                     TextButton(onClick = { showAddOnDialog = true }) {
                         Text(
-                            text = "+ Add Add-on",
+                            text = if (addOns.isEmpty()) "+ Add Add-on" else "Edit Add-ons (${addOns.size})",
                             color = OrangeAccent,
                             fontWeight = FontWeight.SemiBold,
                             style = MaterialTheme.typography.labelLarge
@@ -1306,12 +1698,9 @@ private fun AddProductScreen(
 
                     // Add-on Dialog
                     if (showAddOnDialog) {
-                        AddListItemDialog(
-                            title = "Add Add-on",
-                            placeholder = "e.g. Extra Shot, Pearl, Cheese",
-                            existingItems = addOns,
-                            onAddItem = { addOns = addOns + it },
-                            onRemoveItem = { index -> addOns = addOns.filterIndexed { i, _ -> i != index } },
+                        AddOnSelectionDialog(
+                            selectedAddOns = addOns,
+                            onAddOnsSelected = { addOns = it },
                             onDismiss = { showAddOnDialog = false }
                         )
                     }
@@ -1653,7 +2042,9 @@ private fun AddProductScreen(
                             quantity = quantity.toIntOrNull() ?: 0,
                             lowStockThreshold = lowStockThreshold.toIntOrNull() ?: 5,
                             unit = selectedUnit,
-                            imagePath = savedImagePath
+                            imagePath = savedImagePath,
+                            sizesJson = if (sizes.isNotEmpty()) toJsonArray(sizes) else null,
+                            addOnsJson = if (addOns.isNotEmpty()) toJsonArray(addOns) else null
                         )
                         if (isEditing) {
                             onUpdate(entity)

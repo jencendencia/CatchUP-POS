@@ -1165,12 +1165,19 @@ private fun ItemCustomizationSheet(
     onAddToOrder: (CartItem) -> Unit
 ) {
     var quantity by remember { mutableStateOf(1) }
-    var selectedSize by remember { mutableStateOf("16oz") }
+    val productSizes = remember(product) {
+        product.sizesJson?.let { json ->
+            try {
+                json.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotBlank() }
+            } catch (e: Exception) { emptyList() }
+        } ?: emptyList()
+    }
+    val sizes = if (productSizes.isNotEmpty()) productSizes else listOf("12oz", "16oz", "22oz")
+    var selectedSize by remember { mutableStateOf(sizes.getOrElse(1) { sizes.firstOrNull() ?: "16oz" }) }
     var sugarLevel by remember { mutableStateOf("100%") }
     var iceLevel by remember { mutableStateOf("Regular Ice") }
     var specialInstructions by remember { mutableStateOf("") }
 
-    val sizes = listOf("12oz", "16oz", "22oz")
     val sugarOptions = listOf("0%", "25%", "50%", "75%", "100%")
     val iceOptions = listOf("No Ice", "Less Ice", "Regular Ice", "Extra Ice")
 
