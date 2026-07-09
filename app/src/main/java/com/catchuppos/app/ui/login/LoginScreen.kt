@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -72,7 +73,7 @@ fun LoginScreen(
                 .padding(24.dp),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = DarkCard.copy(alpha = 0.95f)
+                containerColor = Color.Black
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
         ) {
@@ -83,51 +84,17 @@ fun LoginScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Logo
-                Surface(
-                    modifier = Modifier.size(80.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    color = OrangeAccent
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Image(
-                            painter = painterResource(id = com.catchuppos.app.R.drawable.logo),
-                            contentDescription = "Catch Up!",
-                            modifier = Modifier.size(60.dp),
-                            contentScale = ContentScale.Fit
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Brand Name
-                Text(
-                    text = "CATCH",
-                    style = MaterialTheme.typography.displayLarge,
-                    color = TextWhite,
-                    letterSpacing = 6.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "UP!",
-                    style = MaterialTheme.typography.displayLarge,
-                    color = OrangeAccent,
-                    letterSpacing = 6.sp,
-                    fontWeight = FontWeight.Bold
+                Image(
+                    painter = painterResource(id = com.catchuppos.app.R.drawable.logo),
+                    contentDescription = "Catch Up!",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .padding(bottom = 8.dp),
+                    contentScale = ContentScale.Fit
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Tagline
-                Text(
-                    text = "COFFEE • CONVERSATIONS • CONNECTIONS",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = OrangeMuted,
-                    letterSpacing = 2.sp,
-                    textAlign = TextAlign.Center
-                )
-
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 // Divider
                 HorizontalDivider(
