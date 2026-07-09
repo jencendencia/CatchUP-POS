@@ -99,6 +99,10 @@ fun DashboardScreen(
                         OrdersScreen()
                     }
 
+                    NavItem.TRANSACTIONS -> {
+                        TransactionsScreen()
+                    }
+
                     NavItem.PRODUCTS -> {
                         ProductsScreen()
                     }
