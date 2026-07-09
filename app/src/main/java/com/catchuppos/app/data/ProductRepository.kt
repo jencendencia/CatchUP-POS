@@ -96,12 +96,10 @@ class ProductRepository(
                 ProductEntity(title = "Iced Tea", category = "Non Coffee", description = "Peach or Lemon", type = "DRINK", sellingPrice = 65.0),
                 ProductEntity(title = "Nachos", category = "Food", description = "With Cheese & Salsa", type = "FOOD", sellingPrice = 120.0)
             )
-            val insertedIds = productDao.insertProducts(sampleProducts)
 
-            // Create size variants for drink products
-            insertedIds.forEachIndexed { index, id ->
-                val productId = id.toInt()
-                val product = sampleProducts[index]
+            // Insert products one by one to get IDs
+            for (product in sampleProducts) {
+                val productId = productDao.insertProduct(product).toInt()
                 if (product.type == "DRINK") {
                     val basePrice = product.sellingPrice
                     variantDao.insertVariants(listOf(
@@ -110,7 +108,6 @@ class ProductRepository(
                         ProductVariantEntity(productId = productId, sizeName = "22oz", sellingPrice = basePrice + 20, sortOrder = 2),
                     ))
                 } else {
-                    // Food: single "Regular" variant
                     variantDao.insertVariants(listOf(
                         ProductVariantEntity(productId = productId, sizeName = "Regular", sellingPrice = product.sellingPrice, isDefault = true, sortOrder = 0),
                     ))

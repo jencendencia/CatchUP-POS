@@ -1228,7 +1228,7 @@ private fun SizeVariantEditorDialog(
                                         onValueChange = { newVal ->
                                             if (newVal.isEmpty() || newVal.matches(Regex("^\\d*\\.?\\d{0,2}$"))) {
                                                 tempVariants = tempVariants.toMutableList().apply {
-                                                    this[index] = copy(sellingPrice = newVal.toDoubleOrNull() ?: 0.0)
+                                                    this[index] = this[index].copy(sellingPrice = newVal.toDoubleOrNull() ?: 0.0)
                                                 }
                                             }
                                         },
@@ -1537,9 +1537,12 @@ private fun AddProductScreen(
     var showAddOnDialog by remember { mutableStateOf(false) }
 
     // Load variants from DB when editing
+    val addProductContext = LocalContext.current
+    val addProductApp = addProductContext.applicationContext as CatchUpApp
+    val addProductRepository = addProductApp.productRepository
     LaunchedEffect(editingProduct) {
         if (editingProduct != null) {
-            variants = repository.getVariantsByProductIdOnce(editingProduct!!.id).map {
+            variants = addProductRepository.getVariantsByProductIdOnce(editingProduct!!.id).map {
                 ProductVariantUI(it.sizeName, it.sellingPrice, it.costPrice, it.isDefault, it.sortOrder)
             }
         }
