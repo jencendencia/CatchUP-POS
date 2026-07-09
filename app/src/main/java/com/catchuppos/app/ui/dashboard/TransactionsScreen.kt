@@ -5,12 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,72 +16,69 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.catchuppos.app.CatchUpApp
+import com.catchuppos.app.data.TransactionEntity
 import com.catchuppos.app.theme.*
-
-// ── Data Model ──
-
-data class TransactionRecord(
-    val orderId: Int,
-    val customer: String,
-    val items: String,
-    val total: Double,
-    val payment: String,
-    val status: String,
-    val time: String
-)
-
-// ── Sample Data ──
-
-private val sampleTransactions = listOf(
-    TransactionRecord(15, "Master Joel", "2 × Macchiato (16oz)", 170.00, "Cash", "Completed", "04:35 PM"),
-    TransactionRecord(14, "Maria", "1 × Matcha Strawberry (16oz)", 95.00, "GCash", "Completed", "04:30 PM"),
-    TransactionRecord(13, "John", "1 × Cappuccino (16oz)", 85.00, "Cash", "Completed", "04:28 PM"),
-    TransactionRecord(12, "Kevin", "1 × Spanish Latte (16oz)", 85.00, "Cash", "Completed", "04:25 PM"),
-    TransactionRecord(11, "Anna", "2 × Okinawa (16oz)", 170.00, "GCash", "Completed", "04:20 PM"),
-    TransactionRecord(10, "Chris", "1 × Americano (16oz)", 85.00, "Cash", "Completed", "04:18 PM"),
-    TransactionRecord(9, "Rose", "1 × Chocolate (16oz)", 85.00, "Cash", "Completed", "04:15 PM"),
-    TransactionRecord(8, "Mark", "1 × Cookies & Cream (16oz)", 85.00, "GCash", "Completed", "04:10 PM"),
-    TransactionRecord(7, "Sofia", "1 × Caramel Macchiato (16oz)", 95.00, "Cash", "Completed", "03:55 PM"),
-    TransactionRecord(6, "Daniel", "3 × Latte (16oz)", 255.00, "GCash", "Completed", "03:40 PM"),
-    TransactionRecord(5, "Ella", "1 × Mocha (16oz)", 90.00, "Cash", "Completed", "03:25 PM"),
-    TransactionRecord(4, "Brian", "2 × Americano (16oz)", 170.00, "Cash", "Completed", "03:10 PM"),
-    TransactionRecord(3, "Liza", "1 × Vanilla Latte (16oz)", 95.00, "GCash", "Completed", "02:50 PM"),
-    TransactionRecord(2, "Rico", "1 × Hazelnut Latte (16oz)", 95.00, "Cash", "Completed", "02:30 PM"),
-    TransactionRecord(1, "Clara", "1 × Brewed Coffee (16oz)", 75.00, "Cash", "Completed", "02:00 PM")
-)
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
 
 // ── Main Transactions Screen ──
 
 @Composable
 fun TransactionsScreen() {
-    var selectedDateRange by remember { mutableStateOf("July 9, 2026 - July 9, 2026") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as CatchUpApp
+    val repository = app.productRepository
+    val scope = rememberCoroutineScope()
+
+    var selectedDateRange by remember { mutableStateOf("Today") }
     var selectedType by remember { mutableStateOf("All Types") }
     var selectedStatus by remember { mutableStateOf("All Status") }
     var currentPage by remember { mutableIntStateOf(1) }
+    var allTransactions by remember { mutableStateOf<List<TransactionEntity>>(emptyList()) }
     val itemsPerPage = 8
 
+    // Load transactions from database
+    LaunchedEffect(Unit) {
+        allTransactions = repository.getAllTransactionsOnce()
+    }
+
     // Filter logic
-    val filteredTransactions = remember(selectedType, selectedStatus) {
-        sampleTransactions.filter { txn ->
+    val filteredTransactions = remember(allTransactions, selectedType, selectedStatus, selectedDateRange) {
+        val now = System.currentTimeMillis()
+        val startOfDay = getStartOfDay(now)
+
+        allTransactions.filter { txn ->
+            // Date filter
+            val dateMatch = when (selectedDateRange) {
+                "Today" -> txn.createdAt >= startOfDay
+                "This Week" -> txn.createdAt >= startOfDay - 7 * 86400000L
+                "This Month" -> txn.createdAt >= startOfDay - 30 * 86400000L
+                else -> true
+            }
+            // Type filter
             val typeMatch = selectedType == "All Types" ||
-                txn.payment.equals(selectedType, ignoreCase = true)
+                txn.paymentMethod.equals(selectedType, ignoreCase = true)
+            // Status filter
             val statusMatch = selectedStatus == "All Status" ||
                 txn.status.equals(selectedStatus, ignoreCase = true)
-            typeMatch && statusMatch
+
+            dateMatch && typeMatch && statusMatch
         }
     }
 
-    val totalPages = (filteredTransactions.size + itemsPerPage - 1) / itemsPerPage
-    val paginatedTransactions = filteredTransactions.drop((currentPage - 1) * itemsPerPage).take(itemsPerPage)
+    val totalPages = maxOf((filteredTransactions.size + itemsPerPage - 1) / itemsPerPage, 1)
+    val safePage = minOf(currentPage, totalPages)
+    val paginatedTransactions = filteredTransactions.drop((safePage - 1) * itemsPerPage).take(itemsPerPage)
 
     // Metrics
     val totalOrders = filteredTransactions.size
     val totalSales = filteredTransactions.sumOf { it.total }
-    val totalItemsSold = filteredTransactions.sumOf { it.items.split("×").first().trim().toIntOrNull() ?: 0 }
+    val totalItemsSold = filteredTransactions.sumOf { it.itemCount }
     val completedOrders = filteredTransactions.count { it.status == "Completed" }
     val pendingOrders = filteredTransactions.count { it.status == "Pending" }
 
@@ -111,20 +106,14 @@ fun TransactionsScreen() {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Date Range Dropdown
             FilterDropdown(
                 label = selectedDateRange,
                 icon = Icons.Default.DateRange,
-                options = listOf(
-                    "July 9, 2026 - July 9, 2026",
-                    "July 1, 2026 - July 9, 2026",
-                    "June 1, 2026 - June 30, 2026"
-                ),
-                onSelected = { selectedDateRange = it },
+                options = listOf("Today", "This Week", "This Month", "All Time"),
+                onSelected = { selectedDateRange = it; currentPage = 1 },
                 modifier = Modifier.weight(1.2f)
             )
 
-            // Transaction Type Dropdown
             FilterDropdown(
                 label = selectedType,
                 icon = Icons.Default.Payment,
@@ -133,7 +122,6 @@ fun TransactionsScreen() {
                 modifier = Modifier.weight(1f)
             )
 
-            // Transaction Status Dropdown
             FilterDropdown(
                 label = selectedStatus,
                 icon = Icons.Default.Flag,
@@ -144,7 +132,6 @@ fun TransactionsScreen() {
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Export Button
             OutlinedButton(
                 onClick = { /* Export logic */ },
                 modifier = Modifier.height(44.dp),
@@ -243,7 +230,6 @@ fun TransactionsScreen() {
 
                 HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
 
-                // Table Rows
                 if (paginatedTransactions.isEmpty()) {
                     Box(
                         modifier = Modifier
@@ -251,7 +237,17 @@ fun TransactionsScreen() {
                             .height(200.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("No transactions found.", color = TextMuted, style = MaterialTheme.typography.bodyLarge)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.ReceiptLong,
+                                contentDescription = null,
+                                tint = TextGray,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("No transactions found.", color = TextMuted, style = MaterialTheme.typography.bodyLarge)
+                            Text("Complete a checkout to see transactions here.", color = TextGray, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 } else {
                     paginatedTransactions.forEach { txn ->
@@ -268,34 +264,33 @@ fun TransactionsScreen() {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    val from = if (filteredTransactions.isEmpty()) 0 else (safePage - 1) * itemsPerPage + 1
+                    val to = minOf(safePage * itemsPerPage, filteredTransactions.size)
                     Text(
-                        text = "Showing ${(currentPage - 1) * itemsPerPage + 1} to ${minOf(currentPage * itemsPerPage, filteredTransactions.size)} of ${filteredTransactions.size} transactions",
+                        text = "Showing $from to $to of ${filteredTransactions.size} transactions",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextMuted
                     )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        // Previous
                         PaginationButton(
                             label = "<",
                             isActive = false,
-                            enabled = currentPage > 1,
+                            enabled = safePage > 1,
                             onClick = { if (currentPage > 1) currentPage-- }
                         )
-                        // Page numbers
                         for (page in 1..totalPages) {
                             PaginationButton(
                                 label = "$page",
-                                isActive = page == currentPage,
+                                isActive = page == safePage,
                                 enabled = true,
                                 onClick = { currentPage = page }
                             )
                         }
-                        // Next
                         PaginationButton(
                             label = ">",
                             isActive = false,
-                            enabled = currentPage < totalPages,
+                            enabled = safePage < totalPages,
                             onClick = { if (currentPage < totalPages) currentPage++ }
                         )
                     }
@@ -303,6 +298,19 @@ fun TransactionsScreen() {
             }
         }
     }
+}
+
+// ── Helper: Get start of today ──
+
+private fun getStartOfDay(now: Long): Long {
+    val cal = Calendar.getInstance().apply {
+        timeInMillis = now
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return cal.timeInMillis
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -441,7 +449,11 @@ private fun MetricCard(
 // ════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun TransactionRow(txn: TransactionRecord) {
+private fun TransactionRow(txn: TransactionEntity) {
+    val timeFormatted = remember(txn.createdAt) {
+        SimpleDateFormat("hh:mm a", Locale.US).format(Date(txn.createdAt))
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -451,7 +463,7 @@ private fun TransactionRow(txn: TransactionRecord) {
     ) {
         // ORDER #
         Text(
-            text = "#${String.format("%05d", txn.orderId)}",
+            text = "#${String.format("%05d", txn.id)}",
             style = MaterialTheme.typography.bodyMedium,
             color = OrangeAccent,
             fontWeight = FontWeight.SemiBold,
@@ -460,7 +472,7 @@ private fun TransactionRow(txn: TransactionRecord) {
 
         // CUSTOMER
         Text(
-            text = txn.customer,
+            text = txn.customerName,
             style = MaterialTheme.typography.bodyMedium,
             color = TextWhite,
             maxLines = 1,
@@ -470,7 +482,7 @@ private fun TransactionRow(txn: TransactionRecord) {
 
         // ITEMS
         Text(
-            text = txn.items,
+            text = txn.itemsJson,
             style = MaterialTheme.typography.bodySmall,
             color = TextGray,
             maxLines = 1,
@@ -489,16 +501,14 @@ private fun TransactionRow(txn: TransactionRecord) {
 
         // PAYMENT
         Text(
-            text = txn.payment,
+            text = txn.paymentMethod,
             style = MaterialTheme.typography.bodySmall,
             color = TextWhite,
             modifier = Modifier.weight(1f)
         )
 
         // STATUS
-        Box(
-            modifier = Modifier.weight(1.1f)
-        ) {
+        Box(modifier = Modifier.weight(1.1f)) {
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = Color.Transparent,
@@ -529,7 +539,7 @@ private fun TransactionRow(txn: TransactionRecord) {
 
         // TIME
         Text(
-            text = txn.time,
+            text = timeFormatted,
             style = MaterialTheme.typography.bodySmall,
             color = TextGray,
             modifier = Modifier.weight(0.9f)

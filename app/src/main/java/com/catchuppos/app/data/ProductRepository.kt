@@ -4,7 +4,8 @@ import kotlinx.coroutines.flow.Flow
 
 class ProductRepository(
     private val productDao: ProductDao,
-    private val categoryDao: CategoryDao
+    private val categoryDao: CategoryDao,
+    private val transactionDao: TransactionDao
 ) {
 
     val allProducts: Flow<List<ProductEntity>> = productDao.getAllProducts()
@@ -83,4 +84,18 @@ class ProductRepository(
             productDao.insertProducts(sampleProducts)
         }
     }
+
+    // ── Transactions ──
+
+    suspend fun insertTransaction(transaction: TransactionEntity): Long = transactionDao.insertTransaction(transaction)
+
+    suspend fun getAllTransactionsOnce(): List<TransactionEntity> = transactionDao.getAllTransactionsOnce()
+
+    suspend fun getTransactionCount(): Int = transactionDao.getTransactionCount()
+
+    suspend fun getTransactionCountByStatus(status: String): Int = transactionDao.getTransactionCountByStatus(status)
+
+    suspend fun getTotalSales(): Double = transactionDao.getTotalSales() ?: 0.0
+
+    suspend fun getTotalItemsSold(): Int = transactionDao.getTotalItemsSold() ?: 0
 }

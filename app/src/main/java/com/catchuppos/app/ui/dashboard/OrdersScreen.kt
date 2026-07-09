@@ -293,6 +293,28 @@ fun OrdersScreen() {
                 total = subtotal,
                 onConfirm = { amountTendered, customerName ->
                     showPaymentDialog = false
+
+                    val itemsSummary = cartItems.joinToString(", ") { "${it.quantity} × ${it.product.title} (${it.size})" }
+                    val totalItemCount = cartItems.sumOf { it.quantity }
+
+                    // Save transaction to database
+                    scope.launch {
+                        repository.insertTransaction(
+                            com.catchuppos.app.data.TransactionEntity(
+                                customerName = customerName,
+                                itemsJson = itemsSummary,
+                                itemCount = totalItemCount,
+                                total = subtotal,
+                                amountTendered = amountTendered,
+                                changeReturned = amountTendered - subtotal,
+                                paymentMethod = "Cash",
+                                status = "Completed",
+                                transactionId = generateTransactionId(),
+                                createdAt = System.currentTimeMillis()
+                            )
+                        )
+                    }
+
                     checkoutData = CheckoutData(
                         items = cartItems.toList(),
                         subtotal = subtotal,

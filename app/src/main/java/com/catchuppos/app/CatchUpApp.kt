@@ -11,7 +11,7 @@ import kotlinx.coroutines.launch
 class CatchUpApp : Application() {
 
     val database by lazy { AppDatabase.getInstance(this) }
-    val productRepository by lazy { ProductRepository(database.productDao(), database.categoryDao()) }
+    val productRepository by lazy { ProductRepository(database.productDao(), database.categoryDao(), database.transactionDao()) }
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
