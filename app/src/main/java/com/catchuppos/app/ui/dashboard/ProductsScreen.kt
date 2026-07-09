@@ -1067,7 +1067,7 @@ private fun SizeVariantEditorDialog(
 ) {
     var customSizeInput by remember { mutableStateOf("") }
     var customPriceInput by remember { mutableStateOf("") }
-    var tempVariants by remember { mutableStateOf(selectedVariants.toMutableList()) }
+    var tempVariants by remember { mutableStateOf(selectedVariants.toList()) }
     var editingIndex by remember { mutableIntStateOf(-1) }
 
     Dialog(
