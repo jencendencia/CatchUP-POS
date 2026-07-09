@@ -45,9 +45,6 @@ data class ProductEntity(
     @ColumnInfo(name = "image_path")
     val imagePath: String? = null,
 
-    @ColumnInfo(name = "sizes_json")
-    val sizesJson: String? = null,
-
     @ColumnInfo(name = "add_ons_json")
     val addOnsJson: String? = null,
 

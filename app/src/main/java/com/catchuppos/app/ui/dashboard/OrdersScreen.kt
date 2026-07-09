@@ -40,6 +40,7 @@ data class CartItem(
     val product: ProductEntity,
     val quantity: Int = 1,
     val size: String = "12oz",
+    val unitPrice: Double = product.sellingPrice,
     val sugarLevel: String = "100%",
     val iceLevel: String = "Regular Ice",
     val specialInstructions: String = ""
@@ -107,7 +108,7 @@ fun OrdersScreen() {
 
     // Cart totals
     val subtotal = remember(cartItems) {
-        cartItems.sumOf { it.product.sellingPrice * it.quantity }
+        cartItems.sumOf { it.unitPrice * it.quantity }
     }
     val totalItemCount = remember(cartItems) {
         cartItems.sumOf { it.quantity }
@@ -294,7 +295,7 @@ fun OrdersScreen() {
                 onConfirm = { amountTendered, customerName ->
                     showPaymentDialog = false
 
-                    val itemsSummary = cartItems.joinToString(", ") { "${it.quantity} × ${it.product.title} (${it.size})" }
+                    val itemsSummary = cartItems.joinToString(", ") { "${it.quantity} × ${it.product.title} (${it.size}) @ ₱${String.format("%.2f", it.unitPrice)}" }
                     val totalItemCount = cartItems.sumOf { it.quantity }
 
                     // Save transaction to database
@@ -1061,7 +1062,7 @@ private fun HeldOrdersDialog(
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         heldOrders.forEachIndexed { index, order ->
-                            val orderTotal = order.sumOf { it.product.sellingPrice * it.quantity }
+                            val orderTotal = order.sumOf { it.unitPrice * it.quantity }
                             val itemCount = order.sumOf { it.quantity }
 
                             Surface(
@@ -1164,19 +1165,30 @@ private fun ItemCustomizationSheet(
     onBack: () -> Unit,
     onAddToOrder: (CartItem) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as CatchUpApp
+    val repository = app.productRepository
+
     var quantity by remember { mutableStateOf(1) }
-    val productSizes = remember(product) {
-        product.sizesJson?.let { json ->
-            try {
-                json.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotBlank() }
-            } catch (e: Exception) { emptyList() }
-        } ?: emptyList()
+    var productVariants by remember { mutableStateOf<List<com.catchuppos.app.data.ProductVariantEntity>>(emptyList()) }
+
+    LaunchedEffect(product.id) {
+        productVariants = repository.getVariantsByProductIdOnce(product.id)
     }
-    val sizes = if (productSizes.isNotEmpty()) productSizes else listOf("12oz", "16oz", "22oz")
-    var selectedSize by remember { mutableStateOf(sizes.getOrElse(1) { sizes.firstOrNull() ?: "16oz" }) }
+
+    val sizes = if (productVariants.isNotEmpty()) productVariants.map { it.sizeName } else listOf("12oz", "16oz", "22oz")
+    var selectedSize by remember {
+        val defaultVariant = productVariants.firstOrNull { it.isDefault }
+        mutableStateOf(defaultVariant?.sizeName ?: sizes.getOrElse(1) { sizes.firstOrNull() ?: "16oz" })
+    }
+    var selectedVariant by remember {
+        mutableStateOf(productVariants.firstOrNull { it.isDefault } ?: productVariants.firstOrNull())
+    }
     var sugarLevel by remember { mutableStateOf("100%") }
     var iceLevel by remember { mutableStateOf("Regular Ice") }
     var specialInstructions by remember { mutableStateOf("") }
+
+    val currentPrice = selectedVariant?.sellingPrice ?: product.sellingPrice
 
     val sugarOptions = listOf("0%", "25%", "50%", "75%", "100%")
     val iceOptions = listOf("No Ice", "Less Ice", "Regular Ice", "Extra Ice")
@@ -1292,7 +1304,7 @@ private fun ItemCustomizationSheet(
 
                 // Price
                 Text(
-                    text = "₱${String.format("%.0f", product.sellingPrice)}.00",
+                    text = "₱${String.format("%.2f", currentPrice)}",
                     style = MaterialTheme.typography.headlineMedium,
                     color = OrangeAccent,
                     fontWeight = FontWeight.Bold
@@ -1313,7 +1325,10 @@ private fun ItemCustomizationSheet(
                             Surface(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .clickable { selectedSize = size },
+                                    .clickable {
+                                        selectedSize = size
+                                        selectedVariant = productVariants.firstOrNull { it.sizeName == size }
+                                    },
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isSelected) DarkCard else Color.Transparent,
                                 border = BorderStroke(
@@ -1509,6 +1524,7 @@ private fun ItemCustomizationSheet(
                             product = product,
                             quantity = quantity,
                             size = selectedSize,
+                            unitPrice = currentPrice,
                             sugarLevel = sugarLevel,
                             iceLevel = iceLevel,
                             specialInstructions = specialInstructions
@@ -1675,7 +1691,7 @@ private fun CartLineItem(
 
                 // Price
                 Text(
-                    text = "₱${String.format("%.2f", item.product.sellingPrice * item.quantity)}",
+                    text = "₱${String.format("%.2f", item.unitPrice * item.quantity)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextWhite,
                     fontWeight = FontWeight.Medium

@@ -5,7 +5,8 @@ import kotlinx.coroutines.flow.Flow
 class ProductRepository(
     private val productDao: ProductDao,
     private val categoryDao: CategoryDao,
-    private val transactionDao: TransactionDao
+    private val transactionDao: TransactionDao,
+    private val variantDao: ProductVariantDao
 ) {
 
     val allProducts: Flow<List<ProductEntity>> = productDao.getAllProducts()
@@ -40,6 +41,20 @@ class ProductRepository(
 
     suspend fun deleteCategoryById(id: Int) = categoryDao.deleteCategoryById(id)
 
+    // ── Product Variants ──
+
+    suspend fun getVariantsByProductIdOnce(productId: Int): List<ProductVariantEntity> =
+        variantDao.getVariantsByProductIdOnce(productId)
+
+    fun getVariantsByProductId(productId: Int): Flow<List<ProductVariantEntity>> =
+        variantDao.getVariantsByProductId(productId)
+
+    suspend fun insertVariants(variants: List<ProductVariantEntity>) =
+        variantDao.insertVariants(variants)
+
+    suspend fun deleteVariantsByProductId(productId: Int) =
+        variantDao.deleteVariantsByProductId(productId)
+
     // ── Seeding ──
 
     suspend fun seedSampleData() {
@@ -55,10 +70,10 @@ class ProductRepository(
             categoryDao.insertCategories(defaultCategories)
         }
 
-        // Seed products
+        // Seed products with variants
         if (productDao.getProductCount() == 0) {
             val sampleProducts = listOf(
-                ProductEntity(title = "Macchiato", category = "Coffee", type = "DRINK", sellingPrice = 85.0, imagePath = null),
+                ProductEntity(title = "Macchiato", category = "Coffee", type = "DRINK", sellingPrice = 85.0),
                 ProductEntity(title = "Latte", category = "Coffee", type = "DRINK", sellingPrice = 95.0),
                 ProductEntity(title = "Cold Brew", category = "Coffee", description = "Cold Brew", type = "DRINK", sellingPrice = 80.0),
                 ProductEntity(title = "Spanish Latte", category = "Coffee", type = "DRINK", sellingPrice = 110.0),
@@ -81,7 +96,26 @@ class ProductRepository(
                 ProductEntity(title = "Iced Tea", category = "Non Coffee", description = "Peach or Lemon", type = "DRINK", sellingPrice = 65.0),
                 ProductEntity(title = "Nachos", category = "Food", description = "With Cheese & Salsa", type = "FOOD", sellingPrice = 120.0)
             )
-            productDao.insertProducts(sampleProducts)
+            val insertedIds = productDao.insertProducts(sampleProducts)
+
+            // Create size variants for drink products
+            insertedIds.forEachIndexed { index, id ->
+                val productId = id.toInt()
+                val product = sampleProducts[index]
+                if (product.type == "DRINK") {
+                    val basePrice = product.sellingPrice
+                    variantDao.insertVariants(listOf(
+                        ProductVariantEntity(productId = productId, sizeName = "12oz", sellingPrice = basePrice, isDefault = true, sortOrder = 0),
+                        ProductVariantEntity(productId = productId, sizeName = "16oz", sellingPrice = basePrice + 10, sortOrder = 1),
+                        ProductVariantEntity(productId = productId, sizeName = "22oz", sellingPrice = basePrice + 20, sortOrder = 2),
+                    ))
+                } else {
+                    // Food: single "Regular" variant
+                    variantDao.insertVariants(listOf(
+                        ProductVariantEntity(productId = productId, sizeName = "Regular", sellingPrice = product.sellingPrice, isDefault = true, sortOrder = 0),
+                    ))
+                }
+            }
         }
     }
 

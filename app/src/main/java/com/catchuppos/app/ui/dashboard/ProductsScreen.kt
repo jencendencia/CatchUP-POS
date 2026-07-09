@@ -38,12 +38,21 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.text.style.TextAlign
 import com.catchuppos.app.CatchUpApp
 import com.catchuppos.app.data.ProductEntity
+import com.catchuppos.app.data.ProductVariantEntity
 import com.catchuppos.app.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // --- Data Models ---
+
+data class ProductVariantUI(
+    val sizeName: String,
+    val sellingPrice: Double,
+    val costPrice: Double? = null,
+    val isDefault: Boolean = false,
+    val sortOrder: Int = 0
+)
 
 enum class ProductCategory(val displayName: String) {
     ALL("All"),
@@ -60,7 +69,8 @@ data class Product(
     val category: ProductCategory,
     val isActive: Boolean = true,
     val section: ProductSection,
-    val imagePath: String? = null
+    val imagePath: String? = null,
+    val variants: List<ProductVariantUI> = emptyList()
 )
 
 enum class ProductSection(val displayName: String) {
@@ -69,18 +79,6 @@ enum class ProductSection(val displayName: String) {
 }
 
 // --- Mapper ---
-
-private fun parseJsonList(json: String): List<String> {
-    return try {
-        json.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotBlank() }
-    } catch (e: Exception) {
-        emptyList()
-    }
-}
-
-private fun toJsonArray(list: List<String>): String {
-    return "[${list.joinToString(",") { "\"$it\"" }}]"
-}
 
 private fun ProductEntity.toUiProduct(): Product {
     val category = when (category) {
@@ -123,9 +121,18 @@ fun ProductsScreen(
     var dbProducts by remember { mutableStateOf<List<Product>>(emptyList()) }
     val pageSize = 8
 
-    LaunchedEffect(Unit) {
+    suspend fun refreshProducts() {
         val entities = repository.allProductsOnce()
-        dbProducts = entities.map { it.toUiProduct() }
+        dbProducts = entities.map { entity ->
+            val variants = repository.getVariantsByProductIdOnce(entity.id).map {
+                ProductVariantUI(it.sizeName, it.sellingPrice, it.costPrice, it.isDefault, it.sortOrder)
+            }
+            entity.toUiProduct().copy(variants = variants)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        refreshProducts()
     }
 
     if (showAddForm || editingProduct != null) {
@@ -135,27 +142,59 @@ fun ProductsScreen(
                 showAddForm = false
                 editingProduct = null
             },
-            onSave = { entity ->
+            onSave = { entity, variants ->
                 scope.launch {
-                    repository.insertProduct(entity)
-                    val entities = repository.allProductsOnce()
-                    dbProducts = entities.map { it.toUiProduct() }
+                    val productId = repository.insertProduct(entity).toInt()
+                    if (variants.isNotEmpty()) {
+                        repository.insertVariants(variants.map { v ->
+                            ProductVariantEntity(
+                                productId = productId,
+                                sizeName = v.sizeName,
+                                sellingPrice = v.sellingPrice,
+                                costPrice = v.costPrice,
+                                isDefault = v.isDefault,
+                                sortOrder = v.sortOrder
+                            )
+                        })
+                    }
+                    refreshProducts()
                     showAddForm = false
                 }
             },
-            onUpdate = { entity ->
+            onUpdate = { entity, variants ->
                 scope.launch {
                     repository.updateProduct(entity)
-                    val entities = repository.allProductsOnce()
-                    dbProducts = entities.map { it.toUiProduct() }
+                    repository.deleteVariantsByProductId(entity.id)
+                    if (variants.isNotEmpty()) {
+                        repository.insertVariants(variants.map { v ->
+                            ProductVariantEntity(
+                                productId = entity.id,
+                                sizeName = v.sizeName,
+                                sellingPrice = v.sellingPrice,
+                                costPrice = v.costPrice,
+                                isDefault = v.isDefault,
+                                sortOrder = v.sortOrder
+                            )
+                        })
+                    }
+                    refreshProducts()
                     editingProduct = null
                 }
             },
-            onCopy = { entity ->
+            onCopyVariants = { productId, variants ->
                 scope.launch {
-                    repository.insertProduct(entity)
-                    val entities = repository.allProductsOnce()
-                    dbProducts = entities.map { it.toUiProduct() }
+                    repository.deleteVariantsByProductId(productId)
+                    repository.insertVariants(variants.map { v ->
+                        ProductVariantEntity(
+                            productId = productId,
+                            sizeName = v.sizeName,
+                            sellingPrice = v.sellingPrice,
+                            costPrice = v.costPrice,
+                            isDefault = v.isDefault,
+                            sortOrder = v.sortOrder
+                        )
+                    })
+                    refreshProducts()
                     editingProduct = null
                 }
             }
@@ -246,8 +285,7 @@ fun ProductsScreen(
                                                 onDelete = {
                                                     scope.launch {
                                                         repository.deleteProductById(product.id)
-                                                        val entities = repository.allProductsOnce()
-                                                        dbProducts = entities.map { it.toUiProduct() }
+                                                        refreshProducts()
                                                     }
                                                 },
                                                 onEdit = {
@@ -535,8 +573,15 @@ private fun ProductCard(
                 Spacer(modifier = Modifier.height(3.dp))
 
                 // Price
+                val priceText = if (product.variants.size > 1) {
+                    val minPrice = product.variants.minOf { it.sellingPrice }
+                    val maxPrice = product.variants.maxOf { it.sellingPrice }
+                    "₱${String.format("%.0f", minPrice)}-${String.format("%.0f", maxPrice)}"
+                } else {
+                    "₱${String.format("%.2f", product.price)}"
+                }
                 Text(
-                    text = "₱${String.format("%.2f", product.price)}",
+                    text = priceText,
                     style = MaterialTheme.typography.labelMedium,
                     color = OrangeAccent,
                     fontWeight = FontWeight.Bold,
@@ -1009,19 +1054,21 @@ private fun AddedItemsChips(items: List<String>) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// Size Selection Dialog
+// Size Variant Editor Dialog
 // ════════════════════════════════════════════════════════════════════
 
 private val defaultSizes = listOf("12oz", "16oz", "22oz", "Large")
 
 @Composable
-private fun SizeSelectionDialog(
-    selectedSizes: List<String>,
-    onSizesSelected: (List<String>) -> Unit,
+private fun SizeVariantEditorDialog(
+    selectedVariants: List<ProductVariantUI>,
+    onVariantsSelected: (List<ProductVariantUI>) -> Unit,
     onDismiss: () -> Unit
 ) {
     var customSizeInput by remember { mutableStateOf("") }
-    var tempSelected by remember { mutableStateOf(selectedSizes.toList()) }
+    var customPriceInput by remember { mutableStateOf("") }
+    var tempVariants by remember { mutableStateOf(selectedVariants.toMutableList()) }
+    var editingIndex by remember { mutableIntStateOf(-1) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1029,8 +1076,9 @@ private fun SizeSelectionDialog(
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(min = 380.dp, max = 420.dp)
-                .wrapContentHeight(),
+                .widthIn(min = 440.dp, max = 500.dp)
+                .wrapContentHeight()
+                .heightIn(max = 600.dp),
             shape = RoundedCornerShape(20.dp),
             color = Color(0xFF1A1A1A),
             tonalElevation = 0.dp
@@ -1042,18 +1090,8 @@ private fun SizeSelectionDialog(
                     verticalAlignment = Alignment.Top
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Select Sizes",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = TextWhite,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Tap to select sizes for this product",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextMuted,
-                            modifier = Modifier.padding(top = 2.dp)
-                        )
+                        Text("Sizes & Prices", style = MaterialTheme.typography.titleLarge, color = TextWhite, fontWeight = FontWeight.Bold)
+                        Text("Add sizes and set the price for each", style = MaterialTheme.typography.bodySmall, color = TextMuted, modifier = Modifier.padding(top = 2.dp))
                     }
                     IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.Close, contentDescription = "Close", tint = TextGray, modifier = Modifier.size(20.dp))
@@ -1062,39 +1100,42 @@ private fun SizeSelectionDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Predefined size options
-                Text(
-                    text = "PREDEFINED SIZES",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextMuted,
-                    letterSpacing = 1.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                // Quick-add predefined sizes
+                Text("QUICK ADD", style = MaterialTheme.typography.labelSmall, color = TextMuted, letterSpacing = 1.sp, modifier = Modifier.padding(bottom = 8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     defaultSizes.forEach { size ->
-                        val isSelected = size in tempSelected
+                        val exists = tempVariants.any { it.sizeName == size }
                         Surface(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
-                                .clickable {
-                                    tempSelected = if (isSelected) tempSelected.filter { it != size }
-                                    else tempSelected + size
+                                .clickable(enabled = !exists) {
+                                    val basePrice = tempVariants.firstOrNull()?.sellingPrice ?: 85.0
+                                    tempVariants.add(
+                                        ProductVariantUI(
+                                            sizeName = size,
+                                            sellingPrice = basePrice + when (size) {
+                                                "16oz" -> 10.0
+                                                "22oz" -> 20.0
+                                                "Large" -> 15.0
+                                                else -> 0.0
+                                            },
+                                            isDefault = tempVariants.isEmpty(),
+                                            sortOrder = tempVariants.size
+                                        )
+                                    )
+                                    tempVariants = tempVariants.toMutableList()
                                 },
                             shape = RoundedCornerShape(10.dp),
-                            color = if (isSelected) OrangeAccent else DarkCard,
-                            border = if (isSelected) null else BorderStroke(1.dp, DarkBorder)
+                            color = if (exists) DarkCard.copy(alpha = 0.5f) else DarkCard,
+                            border = BorderStroke(1.dp, if (exists) DarkBorder else DarkBorder)
                         ) {
                             Text(
                                 text = size,
                                 modifier = Modifier.padding(vertical = 10.dp),
                                 style = MaterialTheme.typography.labelLarge,
-                                color = if (isSelected) TextWhite else TextMuted,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (exists) TextGray else TextMuted,
+                                fontWeight = FontWeight.Medium,
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -1105,34 +1146,44 @@ private fun SizeSelectionDialog(
                 HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Add custom size
-                Text(
-                    text = "ADD CUSTOM SIZE",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextMuted,
-                    letterSpacing = 1.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                // Custom size input with price
+                Text("ADD CUSTOM SIZE", style = MaterialTheme.typography.labelSmall, color = TextMuted, letterSpacing = 1.sp, modifier = Modifier.padding(bottom = 8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = customSizeInput,
                         onValueChange = { customSizeInput = it },
-                        placeholder = { Text("e.g. 32oz, Extra Large", color = InputPlaceholder) },
+                        placeholder = { Text("Size name", color = InputPlaceholder) },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp),
                         singleLine = true,
                         colors = formFieldColors()
                     )
+                    OutlinedTextField(
+                        value = customPriceInput,
+                        onValueChange = { if (it.isEmpty() || it.matches(Regex("^\\d*\\.?\\d{0,2}$"))) customPriceInput = it },
+                        placeholder = { Text("₱ Price", color = InputPlaceholder) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true,
+                        prefix = { Text("₱", color = TextWhite, fontWeight = FontWeight.Bold) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        colors = formFieldColors()
+                    )
                     Button(
                         onClick = {
-                            if (customSizeInput.isNotBlank() && customSizeInput !in tempSelected) {
-                                tempSelected = tempSelected + customSizeInput.trim()
+                            val price = customPriceInput.toDoubleOrNull() ?: 0.0
+                            if (customSizeInput.isNotBlank() && tempVariants.none { it.sizeName == customSizeInput.trim() }) {
+                                tempVariants.add(
+                                    ProductVariantUI(
+                                        sizeName = customSizeInput.trim(),
+                                        sellingPrice = price,
+                                        isDefault = tempVariants.isEmpty(),
+                                        sortOrder = tempVariants.size
+                                    )
+                                )
+                                tempVariants = tempVariants.toMutableList()
                                 customSizeInput = ""
+                                customPriceInput = ""
                             }
                         },
                         modifier = Modifier.height(48.dp),
@@ -1146,39 +1197,87 @@ private fun SizeSelectionDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Selected sizes display
-                if (tempSelected.isNotEmpty()) {
-                    Text(
-                        text = "SELECTED (${tempSelected.size})",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextMuted,
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        tempSelected.forEach { size ->
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = OrangeAccent.copy(alpha = 0.15f),
-                                border = BorderStroke(1.dp, OrangeAccent)
+                // Variants list with editable prices
+                if (tempVariants.isNotEmpty()) {
+                    Text("VARIANTS (${tempVariants.size})", style = MaterialTheme.typography.labelSmall, color = TextMuted, letterSpacing = 1.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        tempVariants.forEachIndexed { index, variant ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(DarkCard)
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Text(text = size, style = MaterialTheme.typography.labelSmall, color = OrangeAccent, fontWeight = FontWeight.SemiBold)
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = "Remove",
-                                        tint = OrangeAccent,
-                                        modifier = Modifier
-                                            .size(14.dp)
-                                            .clickable { tempSelected = tempSelected.filter { it != size } }
+                                // Default indicator
+                                if (variant.isDefault) {
+                                    Surface(shape = RoundedCornerShape(4.dp), color = OrangeAccent) {
+                                        Text("DEF", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = TextWhite, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                // Size name
+                                Text(variant.sizeName, style = MaterialTheme.typography.bodyMedium, color = TextWhite, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+
+                                // Editable price
+                                if (editingIndex == index) {
+                                    OutlinedTextField(
+                                        value = String.format("%.2f", variant.sellingPrice),
+                                        onValueChange = { newVal ->
+                                            if (newVal.isEmpty() || newVal.matches(Regex("^\\d*\\.?\\d{0,2}$"))) {
+                                                tempVariants = tempVariants.toMutableList().apply {
+                                                    this[index] = copy(sellingPrice = newVal.toDoubleOrNull() ?: 0.0)
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.width(100.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        singleLine = true,
+                                        prefix = { Text("₱", color = TextWhite, fontWeight = FontWeight.Bold, fontSize = 12.sp) },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        textStyle = MaterialTheme.typography.bodySmall.copy(color = TextWhite),
+                                        colors = formFieldColors()
                                     )
+                                    IconButton(onClick = { editingIndex = -1 }, modifier = Modifier.size(24.dp)) {
+                                        Icon(Icons.Default.Check, contentDescription = "Done", tint = StatusGreen, modifier = Modifier.size(16.dp))
+                                    }
+                                } else {
+                                    Surface(
+                                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { editingIndex = index },
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = DarkCard
+                                    ) {
+                                        Text(
+                                            text = "₱${String.format("%.2f", variant.sellingPrice)}",
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = OrangeAccent,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                // Set as default
+                                IconButton(onClick = {
+                                    tempVariants = tempVariants.toMutableList().apply {
+                                        for (i in indices) { this[i] = this[i].copy(isDefault = i == index) }
+                                    }
+                                }, modifier = Modifier.size(24.dp)) {
+                                    Icon(
+                                        imageVector = if (variant.isDefault) Icons.Default.Star else Icons.Default.StarBorder,
+                                        contentDescription = "Set default",
+                                        tint = if (variant.isDefault) OrangeAccent else TextGray,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+
+                                // Remove
+                                IconButton(onClick = {
+                                    tempVariants = tempVariants.toMutableList().apply { removeAt(index) }
+                                }, modifier = Modifier.size(24.dp)) {
+                                    Icon(Icons.Default.Close, contentDescription = "Remove", tint = MutedRed, modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
@@ -1191,7 +1290,7 @@ private fun SizeSelectionDialog(
 
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     TextButton(onClick = {
-                        onSizesSelected(tempSelected)
+                        onVariantsSelected(tempVariants.toList())
                         onDismiss()
                     }) {
                         Text("Done", color = OrangeAccent, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelLarge)
@@ -1393,9 +1492,9 @@ private enum class ProductType { DRINK, FOOD }
 private fun AddProductScreen(
     editingProduct: ProductEntity? = null,
     onBack: () -> Unit,
-    onSave: (ProductEntity) -> Unit = {},
-    onUpdate: (ProductEntity) -> Unit = {},
-    onCopy: (ProductEntity) -> Unit = {}
+    onSave: (ProductEntity, List<ProductVariantUI>) -> Unit = { _, _ -> },
+    onUpdate: (ProductEntity, List<ProductVariantUI>) -> Unit = { _, _ -> },
+    onCopyVariants: (Int, List<ProductVariantUI>) -> Unit = { _, _ -> }
 ) {
     val isEditing = editingProduct != null
 
@@ -1425,18 +1524,26 @@ private fun AddProductScreen(
     var showCategoryDialog by remember { mutableStateOf(false) }
     var unitExpanded by remember { mutableStateOf(false) }
 
-    var sizes by remember(editingProduct) {
-        mutableStateOf(
-            editingProduct?.sizesJson?.let { parseJsonList(it) } ?: emptyList()
-        )
-    }
+    var variants by remember(editingProduct) { mutableStateOf<List<ProductVariantUI>>(emptyList()) }
     var addOns by remember(editingProduct) {
         mutableStateOf(
-            editingProduct?.addOnsJson?.let { parseJsonList(it) } ?: emptyList()
+            editingProduct?.addOnsJson?.let { json ->
+                try { json.removePrefix("[").removeSuffix("]").split(",").map { it.trim().removeSurrounding("\"") }.filter { it.isNotBlank() } }
+                catch (e: Exception) { emptyList() }
+            } ?: emptyList()
         )
     }
-    var showSizeDialog by remember { mutableStateOf(false) }
+    var showVariantDialog by remember { mutableStateOf(false) }
     var showAddOnDialog by remember { mutableStateOf(false) }
+
+    // Load variants from DB when editing
+    LaunchedEffect(editingProduct) {
+        if (editingProduct != null) {
+            variants = repository.getVariantsByProductIdOnce(editingProduct!!.id).map {
+                ProductVariantUI(it.sizeName, it.sellingPrice, it.costPrice, it.isDefault, it.sortOrder)
+            }
+        }
+    }
 
     var imageUri by remember(editingProduct) { mutableStateOf<android.net.Uri?>(null) }
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -1653,32 +1760,44 @@ private fun AddProductScreen(
                     title = "Additional Options (Optional)"
                 ) {
                     // Size / Variant
-                    FormFieldLabel(label = "Size / Variant")
-                    TextButton(onClick = { showSizeDialog = true }) {
+                    FormFieldLabel(label = "Sizes & Prices")
+                    TextButton(onClick = { showVariantDialog = true }) {
                         Text(
-                            text = if (sizes.isEmpty()) "+ Add Size" else "Edit Sizes (${sizes.size})",
+                            text = if (variants.isEmpty()) "+ Add Sizes & Prices" else "Edit Sizes (${variants.size})",
                             color = OrangeAccent,
                             fontWeight = FontWeight.SemiBold,
                             style = MaterialTheme.typography.labelLarge
                         )
                     }
-                    if (sizes.isNotEmpty()) {
-                        AddedItemsChips(items = sizes)
+                    if (variants.isNotEmpty()) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            variants.forEach { v ->
+                                Surface(shape = RoundedCornerShape(8.dp), color = OrangeAccent.copy(alpha = 0.15f), border = BorderStroke(1.dp, OrangeAccent)) {
+                                    Text(
+                                        text = "${v.sizeName} ₱${String.format("%.0f", v.sellingPrice)}",
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = OrangeAccent,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
                     } else {
                         Text(
-                            text = "e.g. 12oz, 16oz, Large",
+                            text = "e.g. 12oz ₱85, 16oz ₱95, 22oz ₱105",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextGray,
                             modifier = Modifier.padding(start = 8.dp)
                         )
                     }
 
-                    // Size Dialog
-                    if (showSizeDialog) {
-                        SizeSelectionDialog(
-                            selectedSizes = sizes,
-                            onSizesSelected = { sizes = it },
-                            onDismiss = { showSizeDialog = false }
+                    // Variant Editor Dialog
+                    if (showVariantDialog) {
+                        SizeVariantEditorDialog(
+                            selectedVariants = variants,
+                            onVariantsSelected = { variants = it },
+                            onDismiss = { showVariantDialog = false }
                         )
                     }
 
@@ -2038,13 +2157,17 @@ private fun AddProductScreen(
                             editingProduct?.imagePath
                         } else null
 
+                        val defaultVariantPrice = variants.firstOrNull { it.isDefault }?.sellingPrice
+                            ?: variants.firstOrNull()?.sellingPrice
+                            ?: (sellingPrice.toDoubleOrNull() ?: 0.0)
+
                         val entity = ProductEntity(
                             id = editingProduct?.id ?: 0,
                             title = productName.ifBlank { "New Product" },
                             description = description.ifBlank { null },
                             category = selectedCategory.displayName,
                             type = if (productType == ProductType.DRINK) "DRINK" else "FOOD",
-                            sellingPrice = sellingPrice.toDoubleOrNull() ?: 0.0,
+                            sellingPrice = defaultVariantPrice,
                             costPrice = costPrice.toDoubleOrNull()?.takeIf { it > 0 },
                             isActive = isActive,
                             trackInventory = trackInventory,
@@ -2052,13 +2175,12 @@ private fun AddProductScreen(
                             lowStockThreshold = lowStockThreshold.toIntOrNull() ?: 5,
                             unit = selectedUnit,
                             imagePath = savedImagePath,
-                            sizesJson = if (sizes.isNotEmpty()) toJsonArray(sizes) else null,
-                            addOnsJson = if (addOns.isNotEmpty()) toJsonArray(addOns) else null
+                            addOnsJson = if (addOns.isNotEmpty()) "[${addOns.joinToString(",") { "\"$it\"" }}]" else null
                         )
                         if (isEditing) {
-                            onUpdate(entity)
+                            onUpdate(entity, variants)
                         } else {
-                            onSave(entity)
+                            onSave(entity, variants)
                         }
                         isSaving = false
                     }
@@ -2092,40 +2214,16 @@ private fun AddProductScreen(
                 )
             }
 
-            // Save as Copy Button (only when editing)
-            if (isEditing) {
+            // Save Variants Button (only when editing)
+            if (isEditing && variants.isNotEmpty()) {
                 Spacer(modifier = Modifier.width(8.dp))
-                var isCopying by remember { mutableStateOf(false) }
+                var isSavingVariants by remember { mutableStateOf(false) }
                 OutlinedButton(
                     onClick = {
-                        isCopying = true
+                        isSavingVariants = true
                         saveScope.launch {
-                            val savedImagePath = if (imageUri != null) {
-                                withContext(Dispatchers.IO) {
-                                    saveImageToInternalStorage(context, imageUri!!)
-                                }
-                            } else {
-                                editingProduct?.imagePath
-                            }
-
-                            val copyEntity = ProductEntity(
-                                title = "${productName.ifBlank { "New Product" }} (Copy)",
-                                description = description.ifBlank { null },
-                                category = selectedCategory.displayName,
-                                type = if (productType == ProductType.DRINK) "DRINK" else "FOOD",
-                                sellingPrice = sellingPrice.toDoubleOrNull() ?: 0.0,
-                                costPrice = costPrice.toDoubleOrNull()?.takeIf { it > 0 },
-                                isActive = isActive,
-                                trackInventory = trackInventory,
-                                quantity = quantity.toIntOrNull() ?: 0,
-                                lowStockThreshold = lowStockThreshold.toIntOrNull() ?: 5,
-                                unit = selectedUnit,
-                                imagePath = savedImagePath,
-                                sizesJson = if (sizes.isNotEmpty()) toJsonArray(sizes) else null,
-                                addOnsJson = if (addOns.isNotEmpty()) toJsonArray(addOns) else null
-                            )
-                            onCopy(copyEntity)
-                            isCopying = false
+                            onCopyVariants(editingProduct!!.id, variants)
+                            isSavingVariants = false
                         }
                     },
                     modifier = Modifier.height(44.dp),
@@ -2135,9 +2233,9 @@ private fun AddProductScreen(
                         containerColor = Color.Transparent,
                         contentColor = OrangeAccent
                     ),
-                    enabled = !isCopying
+                    enabled = !isSavingVariants
                 ) {
-                    if (isCopying) {
+                    if (isSavingVariants) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
                             color = OrangeAccent,
@@ -2145,14 +2243,14 @@ private fun AddProductScreen(
                         )
                     } else {
                         Icon(
-                            imageVector = Icons.Default.ContentCopy,
+                            imageVector = Icons.Default.SaveAlt,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Save as Copy",
+                        text = "Save Variants",
                         fontWeight = FontWeight.Bold
                     )
                 }

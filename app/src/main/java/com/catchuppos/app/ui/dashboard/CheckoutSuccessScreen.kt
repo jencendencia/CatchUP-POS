@@ -304,7 +304,7 @@ fun CheckoutSuccessScreen(
                             modifier = Modifier.padding(horizontal = 12.dp)
                         )
                         Text(
-                            text = "₱${String.format("%.2f", item.product.sellingPrice * item.quantity)}",
+                            text = "₱${String.format("%.2f", item.unitPrice * item.quantity)}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextWhite,
                             fontWeight = FontWeight.Medium
