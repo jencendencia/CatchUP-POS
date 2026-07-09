@@ -150,6 +150,14 @@ fun ProductsScreen(
                     dbProducts = entities.map { it.toUiProduct() }
                     editingProduct = null
                 }
+            },
+            onCopy = { entity ->
+                scope.launch {
+                    repository.insertProduct(entity)
+                    val entities = repository.allProductsOnce()
+                    dbProducts = entities.map { it.toUiProduct() }
+                    editingProduct = null
+                }
             }
         )
     } else {
@@ -1386,7 +1394,8 @@ private fun AddProductScreen(
     editingProduct: ProductEntity? = null,
     onBack: () -> Unit,
     onSave: (ProductEntity) -> Unit = {},
-    onUpdate: (ProductEntity) -> Unit = {}
+    onUpdate: (ProductEntity) -> Unit = {},
+    onCopy: (ProductEntity) -> Unit = {}
 ) {
     val isEditing = editingProduct != null
 
@@ -2081,6 +2090,72 @@ private fun AddProductScreen(
                     text = if (isEditing) "Update Product" else "Save Product",
                     fontWeight = FontWeight.Bold
                 )
+            }
+
+            // Save as Copy Button (only when editing)
+            if (isEditing) {
+                Spacer(modifier = Modifier.width(8.dp))
+                var isCopying by remember { mutableStateOf(false) }
+                OutlinedButton(
+                    onClick = {
+                        isCopying = true
+                        saveScope.launch {
+                            val savedImagePath = if (imageUri != null) {
+                                withContext(Dispatchers.IO) {
+                                    saveImageToInternalStorage(context, imageUri!!)
+                                }
+                            } else {
+                                editingProduct?.imagePath
+                            }
+
+                            val copyEntity = ProductEntity(
+                                title = "${productName.ifBlank { "New Product" }} (Copy)",
+                                description = description.ifBlank { null },
+                                category = selectedCategory.displayName,
+                                type = if (productType == ProductType.DRINK) "DRINK" else "FOOD",
+                                sellingPrice = sellingPrice.toDoubleOrNull() ?: 0.0,
+                                costPrice = costPrice.toDoubleOrNull()?.takeIf { it > 0 },
+                                isActive = isActive,
+                                trackInventory = trackInventory,
+                                quantity = quantity.toIntOrNull() ?: 0,
+                                lowStockThreshold = lowStockThreshold.toIntOrNull() ?: 5,
+                                unit = selectedUnit,
+                                imagePath = savedImagePath,
+                                sizesJson = if (sizes.isNotEmpty()) toJsonArray(sizes) else null,
+                                addOnsJson = if (addOns.isNotEmpty()) toJsonArray(addOns) else null
+                            )
+                            onCopy(copyEntity)
+                            isCopying = false
+                        }
+                    },
+                    modifier = Modifier.height(44.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, OrangeAccent),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = Color.Transparent,
+                        contentColor = OrangeAccent
+                    ),
+                    enabled = !isCopying
+                ) {
+                    if (isCopying) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = OrangeAccent,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Save as Copy",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }
