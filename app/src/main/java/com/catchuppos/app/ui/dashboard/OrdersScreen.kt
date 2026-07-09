@@ -154,129 +154,233 @@ fun OrdersScreen() {
         return
     }
 
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBackground)
-    ) {
-        // ── Left: Product Catalog or Item Customization ──
-        Column(
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+    if (isLandscape) {
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
+                .fillMaxSize()
+                .background(DarkBackground)
         ) {
-            if (selectedProduct != null) {
-                ItemCustomizationSheet(
-                    product = selectedProduct!!,
-                    onBack = { selectedProduct = null },
-                    onAddToOrder = { cartItem ->
-                        cartItems = cartItems + cartItem
-                        selectedProduct = null
-                    }
-                )
-            } else {
-                // Scrollable catalog area
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    if (filteredProducts.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (searchQuery.isNotBlank()) "No drinks found."
-                                else "No products available.",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = TextMuted
-                            )
+            // ── Left: Product Catalog or Item Customization ──
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            ) {
+                if (selectedProduct != null) {
+                    ItemCustomizationSheet(
+                        product = selectedProduct!!,
+                        onBack = { selectedProduct = null },
+                        onAddToOrder = { cartItem ->
+                            cartItems = cartItems + cartItem
+                            selectedProduct = null
                         }
-                    } else {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 24.dp)
-                        ) {
-                            Spacer(modifier = Modifier.height(20.dp))
-
-                            categorizedProducts.forEach { (category, products) ->
-                                val sectionTitle = if (category == "Coffee") "COFFEE DRINKS" else "NON COFFEE DRINKS"
-                                CategorySection(
-                                    title = sectionTitle,
-                                    products = products,
-                                    onProductClick = { selectedProduct = it }
-                                )
-                                Spacer(modifier = Modifier.height(20.dp))
-                            }
-
-                            // Global Rules Banner
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
-                                color = DarkCard
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Info,
-                                        contentDescription = null,
-                                        tint = TextMuted,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Text(
-                                        text = "All drinks are 12oz.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextGray
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
-                    }
-                }
-
-                // ── Bottom Toolbar ──
-                CatalogBottomToolbar(
-                    searchQuery = searchQuery,
-                    onSearchQueryChange = { searchQuery = it },
-                    onCategoriesClick = { showCategoriesDialog = true },
-                    onAddCustomItem = {
-                        // Add custom item to cart
-                    }
-                )
-
-                // Categories Dialog
-                if (showCategoriesDialog) {
-                    CategoriesDialog(
-                        categories = dbCategories,
-                        selectedCategory = selectedCategoryFilter,
-                        onCategorySelected = { categoryName ->
-                            selectedCategoryFilter = categoryName
-                            showCategoriesDialog = false
-                        },
-                        onDismiss = { showCategoriesDialog = false }
                     )
+                } else {
+                    // Scrollable catalog area
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        if (filteredProducts.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (searchQuery.isNotBlank()) "No drinks found."
+                                    else "No products available.",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = TextMuted
+                                )
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = 24.dp)
+                            ) {
+                                Spacer(modifier = Modifier.height(20.dp))
+
+                                categorizedProducts.forEach { (category, products) ->
+                                    val sectionTitle = if (category == "Coffee") "COFFEE DRINKS" else "NON COFFEE DRINKS"
+                                    CategorySection(
+                                        title = sectionTitle,
+                                        products = products,
+                                        onProductClick = { selectedProduct = it }
+                                    )
+                                    Spacer(modifier = Modifier.height(20.dp))
+                                }
+
+                                // Global Rules Banner
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = DarkCard
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Info,
+                                            contentDescription = null,
+                                            tint = TextMuted,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "All drinks are 12oz.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = TextGray
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(16.dp))
+                            }
+                        }
+                    }
+
+                    // ── Bottom Toolbar ──
+                    CatalogBottomToolbar(
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { searchQuery = it },
+                        onCategoriesClick = { showCategoriesDialog = true },
+                        onAddCustomItem = {
+                            // Add custom item to cart
+                        }
+                    )
+
+                    // Categories Dialog
+                    if (showCategoriesDialog) {
+                        CategoriesDialog(
+                            categories = dbCategories,
+                            selectedCategory = selectedCategoryFilter,
+                            onCategorySelected = { categoryName ->
+                                selectedCategoryFilter = categoryName
+                                showCategoriesDialog = false
+                            },
+                            onDismiss = { showCategoriesDialog = false }
+                        )
+                    }
                 }
             }
-        }
 
-        // ── Right: Current Order Panel ──
-        CurrentOrderPanel(
-            cartItems = cartItems,
-            totalItemCount = totalItemCount,
-            subtotal = subtotal,
-            heldOrdersCount = heldOrders.size,
-            onRemoveItem = { removeFromCart(it) },
-            onClearCart = { clearCart() },
-            onHoldOrder = { holdOrder() },
-            onViewHeldOrders = { showHeldOrdersDialog = true },
-            onIncrementItem = { incrementCartItem(it) },
-            onDecrementItem = { decrementCartItem(it) },
-            onCheckout = { showPaymentDialog = true }
-        )
+            // ── Right: Current Order Panel ──
+            CurrentOrderPanel(
+                cartItems = cartItems,
+                totalItemCount = totalItemCount,
+                subtotal = subtotal,
+                heldOrdersCount = heldOrders.size,
+                onRemoveItem = { removeFromCart(it) },
+                onClearCart = { clearCart() },
+                onHoldOrder = { holdOrder() },
+                onViewHeldOrders = { showHeldOrdersDialog = true },
+                onIncrementItem = { incrementCartItem(it) },
+                onDecrementItem = { decrementCartItem(it) },
+                onCheckout = { showPaymentDialog = true }
+            )
+        }
+    } else {
+        // Portrait mode: Column layout
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(DarkBackground)
+        ) {
+            // Product catalog takes most of the space
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                if (selectedProduct != null) {
+                    ItemCustomizationSheet(
+                        product = selectedProduct!!,
+                        onBack = { selectedProduct = null },
+                        onAddToOrder = { cartItem ->
+                            cartItems = cartItems + cartItem
+                            selectedProduct = null
+                        }
+                    )
+                } else {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        if (filteredProducts.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (searchQuery.isNotBlank()) "No drinks found."
+                                    else "No products available.",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = TextMuted
+                                )
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(horizontal = 16.dp)
+                            ) {
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                categorizedProducts.forEach { (category, products) ->
+                                    val sectionTitle = if (category == "Coffee") "COFFEE DRINKS" else "NON COFFEE DRINKS"
+                                    CategorySection(
+                                        title = sectionTitle,
+                                        products = products,
+                                        onProductClick = { selectedProduct = it }
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
+                    }
+
+                    // Bottom Toolbar
+                    CatalogBottomToolbar(
+                        searchQuery = searchQuery,
+                        onSearchQueryChange = { searchQuery = it },
+                        onCategoriesClick = { showCategoriesDialog = true },
+                        onAddCustomItem = { }
+                    )
+
+                    if (showCategoriesDialog) {
+                        CategoriesDialog(
+                            categories = dbCategories,
+                            selectedCategory = selectedCategoryFilter,
+                            onCategorySelected = { categoryName ->
+                                selectedCategoryFilter = categoryName
+                                showCategoriesDialog = false
+                            },
+                            onDismiss = { showCategoriesDialog = false }
+                        )
+                    }
+                }
+            }
+
+            // Order panel at the bottom in portrait
+            CurrentOrderPanel(
+                cartItems = cartItems,
+                totalItemCount = totalItemCount,
+                subtotal = subtotal,
+                heldOrdersCount = heldOrders.size,
+                onRemoveItem = { removeFromCart(it) },
+                onClearCart = { clearCart() },
+                onHoldOrder = { holdOrder() },
+                onViewHeldOrders = { showHeldOrdersDialog = true },
+                onIncrementItem = { incrementCartItem(it) },
+                onDecrementItem = { decrementCartItem(it) },
+                onCheckout = { showPaymentDialog = true },
+                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)
+            )
+        }
+    }
 
         // Held Orders Dialog
         if (showHeldOrdersDialog) {
@@ -343,6 +447,10 @@ private fun CategorySection(
     products: List<ProductEntity>,
     onProductClick: (ProductEntity) -> Unit
 ) {
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val columns = if (isLandscape) 5 else 3
+
     Column {
         // Section Header with orange underline
         Text(
@@ -363,9 +471,9 @@ private fun CategorySection(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Product grid — 5 columns for compact cards
+        // Product grid — responsive columns based on orientation
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            products.chunked(5).forEach { rowProducts ->
+            products.chunked(columns).forEach { rowProducts ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -377,7 +485,7 @@ private fun CategorySection(
                             onClick = { onProductClick(product) }
                         )
                     }
-                    repeat(5 - rowProducts.size) {
+                    repeat(columns - rowProducts.size) {
                         Spacer(modifier = Modifier.weight(1f))
                     }
                 }
@@ -575,10 +683,11 @@ private fun CurrentOrderPanel(
     onViewHeldOrders: () -> Unit = {},
     onIncrementItem: (Int) -> Unit = {},
     onDecrementItem: (Int) -> Unit = {},
-    onCheckout: () -> Unit
+    onCheckout: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .width(320.dp)
             .fillMaxHeight(),
         color = Color(0xFF0D0D0D),

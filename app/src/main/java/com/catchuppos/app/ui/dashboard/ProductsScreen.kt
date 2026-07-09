@@ -271,9 +271,12 @@ fun ProductsScreen(
                                 modifier = Modifier.padding(bottom = 4.dp)
                             )
 
-                            // Product Cards Grid (5 columns)
+                            // Product Cards Grid — responsive columns
+                            val configuration = LocalConfiguration.current
+                            val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+                            val gridColumns = if (isLandscape) 5 else 3
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                products.chunked(5).forEach { rowProducts ->
+                                products.chunked(gridColumns).forEach { rowProducts ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -298,8 +301,8 @@ fun ProductsScreen(
                                                 }
                                             )
                                         }
-                                        // Fill empty space if less than 5
-                                        repeat(5 - rowProducts.size) {
+                                        // Fill empty space
+                                        repeat(gridColumns - rowProducts.size) {
                                             Spacer(modifier = Modifier.weight(1f))
                                         }
                                     }
