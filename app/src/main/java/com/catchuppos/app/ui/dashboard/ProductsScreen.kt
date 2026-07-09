@@ -1013,7 +1013,7 @@ private fun SizeSelectionDialog(
     onDismiss: () -> Unit
 ) {
     var customSizeInput by remember { mutableStateOf("") }
-    var tempSelected by remember { mutableStateOf(selectedSizes.toMutableList()) }
+    var tempSelected by remember { mutableStateOf(selectedSizes.toList()) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1074,7 +1074,7 @@ private fun SizeSelectionDialog(
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
                                 .clickable {
-                                    tempSelected = if (isSelected) tempSelected.toMutableList().apply { remove(size) }
+                                    tempSelected = if (isSelected) tempSelected.filter { it != size }
                                     else tempSelected + size
                                 },
                             shape = RoundedCornerShape(10.dp),
@@ -1169,7 +1169,7 @@ private fun SizeSelectionDialog(
                                         tint = OrangeAccent,
                                         modifier = Modifier
                                             .size(14.dp)
-                                            .clickable { tempSelected = tempSelected.toMutableList().apply { remove(size) } }
+                                            .clickable { tempSelected = tempSelected.filter { it != size } }
                                     )
                                 }
                             }
@@ -1207,7 +1207,7 @@ private fun AddOnSelectionDialog(
     onDismiss: () -> Unit
 ) {
     var customAddOnInput by remember { mutableStateOf("") }
-    var tempSelected by remember { mutableStateOf(selectedAddOns.toMutableList()) }
+    var tempSelected by remember { mutableStateOf(selectedAddOns.toList()) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1251,7 +1251,7 @@ private fun AddOnSelectionDialog(
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
                                 .clickable {
-                                    tempSelected = if (isSelected) tempSelected.toMutableList().apply { remove(addOn) }
+                                    tempSelected = if (isSelected) tempSelected.filter { it != addOn }
                                     else tempSelected + addOn
                                 },
                             shape = RoundedCornerShape(10.dp),
@@ -1283,7 +1283,7 @@ private fun AddOnSelectionDialog(
                                 .weight(1f)
                                 .clip(RoundedCornerShape(10.dp))
                                 .clickable {
-                                    tempSelected = if (isSelected) tempSelected.toMutableList().apply { remove(addOn) }
+                                    tempSelected = if (isSelected) tempSelected.filter { it != addOn }
                                     else tempSelected + addOn
                                 },
                             shape = RoundedCornerShape(10.dp),
@@ -1351,7 +1351,7 @@ private fun AddOnSelectionDialog(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Text(addOn, style = MaterialTheme.typography.labelSmall, color = Color(0xFF9C27B0), fontWeight = FontWeight.SemiBold)
-                                    Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color(0xFF9C27B0), modifier = Modifier.size(14.dp).clickable { tempSelected = tempSelected.toMutableList().apply { remove(addOn) } })
+                                    Icon(Icons.Default.Close, contentDescription = "Remove", tint = Color(0xFF9C27B0), modifier = Modifier.size(14.dp).clickable { tempSelected = tempSelected.filter { it != addOn } })
                                 }
                             }
                         }
