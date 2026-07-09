@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.catchuppos.app.auth.AuthState
 import com.catchuppos.app.ui.dashboard.DashboardScreen
 import com.catchuppos.app.ui.login.LoginScreen
 
@@ -31,6 +32,7 @@ fun CatchUpNavGraph(navController: NavHostController) {
         composable(Routes.DASHBOARD) {
             DashboardScreen(
                 onLogout = {
+                    AuthState.logout()
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(Routes.DASHBOARD) { inclusive = true }
                     }

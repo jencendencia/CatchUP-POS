@@ -22,23 +22,26 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.catchuppos.app.R
+import com.catchuppos.app.auth.AuthState
 import com.catchuppos.app.theme.*
 
 enum class NavItem(
     val label: String,
     val activeIcon: ImageVector,
-    val inactiveIcon: ImageVector
+    val inactiveIcon: ImageVector,
+    val adminOnly: Boolean = false
 ) {
     DASHBOARD("Dashboard", Icons.Filled.Speed, Icons.Outlined.Speed),
     ORDERS("Orders", Icons.Filled.Receipt, Icons.Outlined.Receipt),
     PRODUCTS("Products", Icons.Filled.Inventory2, Icons.Outlined.Inventory2),
-    TRANSACTIONS("Transactions", Icons.Filled.SwapHoriz, Icons.Outlined.SwapHoriz),
-    REPORTS("Reports", Icons.Filled.BarChart, Icons.Outlined.BarChart),
-    CUSTOMERS("Customers", Icons.Filled.People, Icons.Outlined.People),
-    SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
+    TRANSACTIONS("Transactions", Icons.Filled.SwapHoriz, Icons.Outlined.SwapHoriz, adminOnly = true),
+    REPORTS("Reports", Icons.Filled.BarChart, Icons.Outlined.BarChart, adminOnly = true),
+    CUSTOMERS("Customers", Icons.Filled.People, Icons.Outlined.People, adminOnly = true),
+    SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings, adminOnly = true)
 }
 
 @Composable
@@ -47,7 +50,15 @@ fun Sidebar(
     onNavItemClick: (NavItem) -> Unit = {},
     onLogout: () -> Unit = {}
 ) {
-    var isCollapsed by remember { mutableStateOf(false) }
+    val configuration = LocalConfiguration.current
+    val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+    var isCollapsed by remember { mutableStateOf(isPortrait) }
+
+    // Auto-collapse/expand on orientation change
+    LaunchedEffect(isPortrait) {
+        isCollapsed = isPortrait
+    }
+
     val sidebarWidth = if (isCollapsed) 72.dp else 240.dp
 
     Box(
@@ -124,6 +135,9 @@ fun Sidebar(
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 NavItem.entries.forEach { item ->
+                    // Skip admin-only items for non-admin users
+                    if (item.adminOnly && !AuthState.isAdmin) return@forEach
+
                     val isActive = item == activeItem
                     NavItemRow(
                         item = item,

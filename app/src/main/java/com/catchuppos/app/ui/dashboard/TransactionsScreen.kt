@@ -19,7 +19,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.catchuppos.app.CatchUpApp
+import com.catchuppos.app.data.OrderItemEntity
 import com.catchuppos.app.data.TransactionEntity
 import com.catchuppos.app.theme.*
 import kotlinx.coroutines.launch
@@ -40,6 +43,7 @@ fun TransactionsScreen() {
     var selectedStatus by remember { mutableStateOf("All Status") }
     var currentPage by remember { mutableIntStateOf(1) }
     var allTransactions by remember { mutableStateOf<List<TransactionEntity>>(emptyList()) }
+    var selectedTransaction by remember { mutableStateOf<TransactionEntity?>(null) }
     val itemsPerPage = 8
 
     // Load transactions from database
@@ -251,7 +255,7 @@ fun TransactionsScreen() {
                     }
                 } else {
                     paginatedTransactions.forEach { txn ->
-                        TransactionRow(txn)
+                        TransactionRow(txn, onClick = { selectedTransaction = txn })
                         HorizontalDivider(color = DarkBorder, thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
                     }
                 }
@@ -298,9 +302,15 @@ fun TransactionsScreen() {
             }
         }
     }
-}
 
-// ── Helper: Get start of today ──
+    // Transaction Detail Dialog
+    if (selectedTransaction != null) {
+        TransactionDetailDialog(
+            transaction = selectedTransaction!!,
+            onDismiss = { selectedTransaction = null }
+        )
+    }
+}
 
 private fun getStartOfDay(now: Long): Long {
     val cal = Calendar.getInstance().apply {
@@ -449,7 +459,7 @@ private fun MetricCard(
 // ════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun TransactionRow(txn: TransactionEntity) {
+private fun TransactionRow(txn: TransactionEntity, onClick: () -> Unit = {}) {
     val timeFormatted = remember(txn.createdAt) {
         SimpleDateFormat("hh:mm a", Locale.US).format(Date(txn.createdAt))
     }
@@ -457,7 +467,7 @@ private fun TransactionRow(txn: TransactionEntity) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { /* Open detail */ }
+            .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -553,6 +563,258 @@ private fun TransactionRow(txn: TransactionEntity) {
             modifier = Modifier
                 .weight(0.3f)
                 .size(18.dp)
+        )
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Transaction Detail Dialog
+// ════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun TransactionDetailDialog(
+    transaction: TransactionEntity,
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as CatchUpApp
+    val repository = app.productRepository
+
+    val dateFormatted = remember(transaction.createdAt) {
+        SimpleDateFormat("MMMM dd, yyyy hh:mm a", Locale.US).format(Date(transaction.createdAt))
+    }
+
+    var orderItems by remember { mutableStateOf<List<OrderItemEntity>>(emptyList()) }
+
+    LaunchedEffect(transaction.id) {
+        orderItems = repository.getOrderItemsByTransactionId(transaction.id)
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .widthIn(min = 420.dp, max = 520.dp)
+                .wrapContentHeight()
+                .heightIn(max = 600.dp),
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xFF1A1A1A),
+            tonalElevation = 0.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Order #${String.format("%05d", transaction.id)}",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = OrangeAccent,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = dateFormatted,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = TextGray, modifier = Modifier.size(20.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Status Badge
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.Transparent,
+                    border = BorderStroke(
+                        1.dp,
+                        when (transaction.status) {
+                            "Completed" -> StatusGreen
+                            "Pending" -> Color(0xFFFFC107)
+                            "Canceled" -> MutedRed
+                            else -> DarkBorder
+                        }
+                    )
+                ) {
+                    Text(
+                        text = transaction.status,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = when (transaction.status) {
+                            "Completed" -> StatusGreen
+                            "Pending" -> Color(0xFFFFC107)
+                            "Canceled" -> MutedRed
+                            else -> TextMuted
+                        },
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Info Rows
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    DetailInfoRow(label = "Customer", value = transaction.customerName)
+                    DetailInfoRow(label = "Cashier", value = transaction.cashierName.ifBlank { "N/A" })
+                    DetailInfoRow(label = "Payment", value = transaction.paymentMethod)
+                    DetailInfoRow(label = "Items Sold", value = "${transaction.itemCount}")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Items List
+                Text(
+                    text = "ORDER ITEMS",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextMuted,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                if (orderItems.isEmpty()) {
+                    // Fallback to itemsJson for old transactions
+                    val fallbackItems = remember(transaction.itemsJson) {
+                        transaction.itemsJson.split(", ").mapNotNull { item ->
+                            val trimmed = item.trim()
+                            if (trimmed.isNotBlank()) trimmed else null
+                        }
+                    }
+                    if (fallbackItems.isEmpty()) {
+                        Text(
+                            text = "No item details available",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextGray
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            fallbackItems.forEach { item ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(DarkCard)
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Receipt,
+                                        contentDescription = null,
+                                        tint = OrangeAccent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = item,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextWhite,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        orderItems.forEach { item ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(DarkCard)
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Receipt,
+                                    contentDescription = null,
+                                    tint = OrangeAccent,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${item.quantity}x ${item.productName} (${item.size})",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextWhite
+                                    )
+                                    Text(
+                                        text = "₱${String.format("%.2f", item.unitPrice)} each",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextGray
+                                    )
+                                }
+                                Text(
+                                    text = "₱${String.format("%.2f", item.subtotal)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = OrangeAccent,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Totals
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DetailInfoRow(label = "Total", value = "₱${String.format("%.2f", transaction.total)}", valueColor = OrangeAccent, bold = true)
+                    DetailInfoRow(label = "Amount Tendered", value = "₱${String.format("%.2f", transaction.amountTendered)}")
+                    DetailInfoRow(label = "Change", value = "₱${String.format("%.2f", transaction.changeReturned)}")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Close Button
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(
+                            text = "Close",
+                            color = OrangeAccent,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailInfoRow(label: String, value: String, valueColor: Color = TextWhite, bold: Boolean = false) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = TextMuted
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = valueColor,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium
         )
     }
 }

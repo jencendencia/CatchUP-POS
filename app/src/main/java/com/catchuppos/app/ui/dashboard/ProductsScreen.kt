@@ -38,6 +38,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.text.style.TextAlign
 import com.catchuppos.app.CatchUpApp
+import com.catchuppos.app.auth.AuthState
 import com.catchuppos.app.data.ProductEntity
 import com.catchuppos.app.data.ProductVariantEntity
 import com.catchuppos.app.theme.*
@@ -359,7 +360,7 @@ private fun ProductsTopBar(
             }
         }
 
-        // Row 2: Search + Add Product
+        // Row 2: Search + Add Product (Admin only)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -396,28 +397,30 @@ private fun ProductsTopBar(
                 textStyle = MaterialTheme.typography.bodyMedium
             )
 
-            // Add Product Button
-            Button(
-                onClick = onAddProduct,
-                modifier = Modifier.height(48.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = OrangeAccent,
-                    contentColor = TextWhite
-                ),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Add Product",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
+            // Add Product Button (Admin only)
+            if (AuthState.isAdmin) {
+                Button(
+                    onClick = onAddProduct,
+                    modifier = Modifier.height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = OrangeAccent,
+                        contentColor = TextWhite
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Add Product",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }
@@ -467,46 +470,48 @@ private fun ProductCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Box {
-            // More Actions Menu Button (⋮)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(22.dp)
-                    .padding(top = 2.dp, end = 2.dp)
-                    .clickable { showMenu = true }
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.MoreVert,
-                    contentDescription = "More actions",
-                    tint = TextMuted,
-                    modifier = Modifier.size(12.dp)
-                )
-            }
+            // More Actions Menu Button (Admin only)
+            if (AuthState.isAdmin) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(22.dp)
+                        .padding(top = 2.dp, end = 2.dp)
+                        .clickable { showMenu = true }
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.MoreVert,
+                        contentDescription = "More actions",
+                        tint = TextMuted,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
 
-            DropdownMenu(
-                expanded = showMenu,
-                onDismissRequest = { showMenu = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Edit", color = TextWhite) },
-                    onClick = {
-                        showMenu = false
-                        onEdit()
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Default.Edit, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp))
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Delete", color = MutedRed) },
-                    onClick = {
-                        showMenu = false
-                        onDelete()
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Default.Delete, contentDescription = null, tint = MutedRed, modifier = Modifier.size(18.dp))
-                    }
-                )
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Edit", color = TextWhite) },
+                        onClick = {
+                            showMenu = false
+                            onEdit()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp))
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = MutedRed) },
+                        onClick = {
+                            showMenu = false
+                            onDelete()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.Delete, contentDescription = null, tint = MutedRed, modifier = Modifier.size(18.dp))
+                        }
+                    )
+                }
             }
 
             Column(
@@ -1950,6 +1955,29 @@ private fun AddProductScreen(
                                     androidx.compose.foundation.Image(
                                         bitmap = bitmap.asImageBitmap(),
                                         contentDescription = "Preview",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Image,
+                                        contentDescription = "Preview",
+                                        tint = TextGray,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                }
+                            } else if (editingProduct?.imagePath != null) {
+                                val existingBitmap = remember(editingProduct?.imagePath) {
+                                    try {
+                                        android.graphics.BitmapFactory.decodeFile(editingProduct?.imagePath)
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                }
+                                if (existingBitmap != null) {
+                                    androidx.compose.foundation.Image(
+                                        bitmap = existingBitmap.asImageBitmap(),
+                                        contentDescription = "Current image",
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop
                                     )

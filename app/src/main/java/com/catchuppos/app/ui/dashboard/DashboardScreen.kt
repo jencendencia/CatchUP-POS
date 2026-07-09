@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.catchuppos.app.CatchUpApp
+import com.catchuppos.app.auth.AuthState
 import com.catchuppos.app.theme.*
 @Composable
 fun DashboardScreen(
@@ -23,6 +24,7 @@ fun DashboardScreen(
     var productCount by remember { mutableIntStateOf(0) }
     var todaySales by remember { mutableDoubleStateOf(0.0) }
     var customersServed by remember { mutableIntStateOf(0) }
+    val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     // Load real data from repository
     LaunchedEffect(Unit) {
@@ -120,6 +122,10 @@ fun DashboardScreen(
 
                     NavItem.PRODUCTS -> {
                         ProductsScreen()
+                    }
+
+                    NavItem.SETTINGS -> {
+                        SettingsScreen()
                     }
 
                     else -> {

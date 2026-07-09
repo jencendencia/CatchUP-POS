@@ -6,7 +6,8 @@ class ProductRepository(
     private val productDao: ProductDao,
     private val categoryDao: CategoryDao,
     private val transactionDao: TransactionDao,
-    private val variantDao: ProductVariantDao
+    private val variantDao: ProductVariantDao,
+    private val orderItemDao: OrderItemDao
 ) {
 
     val allProducts: Flow<List<ProductEntity>> = productDao.getAllProducts()
@@ -149,4 +150,18 @@ class ProductRepository(
         }
         return cal.timeInMillis
     }
+
+    // ── Order Items ──
+
+    suspend fun insertOrderItems(items: List<OrderItemEntity>) = orderItemDao.insertOrderItems(items)
+
+    suspend fun getOrderItemsByTransactionId(transactionId: Int): List<OrderItemEntity> =
+        orderItemDao.getOrderItemsByTransactionId(transactionId)
+
+    fun getOrderItemsByTransactionIdFlow(transactionId: Int): Flow<List<OrderItemEntity>> =
+        orderItemDao.getOrderItemsByTransactionIdFlow(transactionId)
+
+    suspend fun getProductSalesSummary(): List<ProductSalesSummary> = orderItemDao.getProductSalesSummary()
+
+    suspend fun getTotalSalesByProduct(productName: String): Double? = orderItemDao.getTotalSalesByProduct(productName)
 }

@@ -7,7 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -29,7 +29,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.catchuppos.app.auth.AuthState
+import com.catchuppos.app.CatchUpApp
 import com.catchuppos.app.theme.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(
@@ -41,6 +44,9 @@ fun LoginScreen(
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val focusManager = LocalFocusManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val app = context.applicationContext as CatchUpApp
+    val scope = rememberCoroutineScope()
 
     Box(
         modifier = Modifier
@@ -104,18 +110,18 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(28.dp))
 
-                // Email Field
+                // Username Field
                 OutlinedTextField(
                     value = email,
                     onValueChange = {
                         email = it
                         errorMessage = null
                     },
-                    label = { Text("Email or Username") },
+                    label = { Text("Username") },
                     leadingIcon = {
                         Icon(
-                            imageVector = Icons.Default.Email,
-                            contentDescription = "Email",
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Username",
                             tint = TextMuted
                         )
                     },
@@ -199,8 +205,17 @@ fun LoginScreen(
                             focusManager.clearFocus()
                             if (email.isNotBlank() && password.isNotBlank()) {
                                 isLoading = true
-                                // Simulate login
-                                onLoginSuccess()
+                                errorMessage = null
+                                scope.launch {
+                                    val user = app.userRepository.login(email.trim(), password)
+                                    if (user != null) {
+                                        AuthState.login(user)
+                                        onLoginSuccess()
+                                    } else {
+                                        errorMessage = "Invalid email or password"
+                                        isLoading = false
+                                    }
+                                }
                             }
                         }
                     ),
@@ -225,11 +240,20 @@ fun LoginScreen(
                 Button(
                     onClick = {
                         if (email.isBlank() || password.isBlank()) {
-                            errorMessage = "Please enter email and password"
+                            errorMessage = "Please enter username and password"
                         } else {
                             isLoading = true
-                            // Simulate login delay
-                            onLoginSuccess()
+                            errorMessage = null
+                            scope.launch {
+                                val user = app.userRepository.login(email.trim(), password)
+                                if (user != null) {
+                                    AuthState.login(user)
+                                    onLoginSuccess()
+                                } else {
+                                    errorMessage = "Invalid email or password"
+                                    isLoading = false
+                                }
+                            }
                         }
                     },
                     modifier = Modifier

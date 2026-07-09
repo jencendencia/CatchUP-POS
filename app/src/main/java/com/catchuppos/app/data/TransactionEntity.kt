@@ -36,6 +36,12 @@ data class TransactionEntity(
     @ColumnInfo(name = "transaction_id")
     val transactionId: String = "",
 
+    @ColumnInfo(name = "cashier_id")
+    val cashierId: Int = 0,
+
+    @ColumnInfo(name = "cashier_name")
+    val cashierName: String = "",
+
     @ColumnInfo(name = "created_at")
     val createdAt: Long = System.currentTimeMillis()
 )

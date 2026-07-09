@@ -30,6 +30,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.text.KeyboardOptions
 import com.catchuppos.app.CatchUpApp
+import com.catchuppos.app.data.OrderItemEntity
 import com.catchuppos.app.data.ProductEntity
 import com.catchuppos.app.theme.*
 import kotlinx.coroutines.launch
@@ -402,9 +403,9 @@ fun OrdersScreen() {
                 val itemsSummary = cartItems.joinToString(", ") { "${it.quantity} × ${it.product.title} (${it.size}) @ ₱${String.format("%.2f", it.unitPrice)}" }
                 val totalItemCount = cartItems.sumOf { it.quantity }
 
-                // Save transaction to database
+                // Save transaction and order items to database
                 scope.launch {
-                    repository.insertTransaction(
+                    val txnId = repository.insertTransaction(
                         com.catchuppos.app.data.TransactionEntity(
                             customerName = customerName,
                             itemsJson = itemsSummary,
@@ -415,9 +416,25 @@ fun OrdersScreen() {
                             paymentMethod = "Cash",
                             status = "Completed",
                             transactionId = generateTransactionId(),
+                            cashierId = com.catchuppos.app.auth.AuthState.currentUser?.id ?: 0,
+                            cashierName = com.catchuppos.app.auth.AuthState.currentUser?.username ?: "",
                             createdAt = System.currentTimeMillis()
                         )
                     )
+
+                    // Save individual order items
+                    val orderItems = cartItems.map { cartItem ->
+                        OrderItemEntity(
+                            transactionId = txnId.toInt(),
+                            productId = cartItem.product.id,
+                            productName = cartItem.product.title,
+                            size = cartItem.size,
+                            quantity = cartItem.quantity,
+                            unitPrice = cartItem.unitPrice,
+                            subtotal = cartItem.unitPrice * cartItem.quantity
+                        )
+                    }
+                    repository.insertOrderItems(orderItems)
                 }
 
                 checkoutData = CheckoutData(
