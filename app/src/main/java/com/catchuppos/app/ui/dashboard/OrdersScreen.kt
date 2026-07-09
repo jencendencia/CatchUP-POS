@@ -55,37 +55,31 @@ fun OrdersScreen() {
     val scope = rememberCoroutineScope()
 
     var drinkProducts by remember { mutableStateOf<List<ProductEntity>>(emptyList()) }
-    var cartItems by remember { mutableStateOf(mutableListOf<CartItem>()) }
+    var cartItems by remember { mutableStateOf<List<CartItem>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedProduct by remember { mutableStateOf<ProductEntity?>(null) }
     var showCategoriesDialog by remember { mutableStateOf(false) }
     var selectedCategoryFilter by remember { mutableStateOf<String?>(null) }
     var dbCategories by remember { mutableStateOf<List<com.catchuppos.app.data.CategoryEntity>>(emptyList()) }
-    var heldOrders by remember { mutableStateOf(mutableListOf<List<CartItem>>()) }
+    var heldOrders by remember { mutableStateOf<List<List<CartItem>>>(emptyList()) }
     var showHeldOrdersDialog by remember { mutableStateOf(false) }
     var showPaymentDialog by remember { mutableStateOf(false) }
     var checkoutData by remember { mutableStateOf<CheckoutData?>(null) }
 
     fun holdOrder() {
         if (cartItems.isNotEmpty()) {
-            heldOrders.add(cartItems.toList())
-            heldOrders = heldOrders.toMutableList()
-            cartItems.clear()
-            cartItems = cartItems.toMutableList()
+            heldOrders = heldOrders + listOf(cartItems)
+            cartItems = emptyList()
         }
     }
 
     fun restoreHeldOrder(index: Int) {
-        cartItems.clear()
-        cartItems.addAll(heldOrders[index])
-        cartItems = cartItems.toMutableList()
-        heldOrders.removeAt(index)
-        heldOrders = heldOrders.toMutableList()
+        cartItems = heldOrders[index]
+        heldOrders = heldOrders.toMutableList().apply { removeAt(index) }
     }
 
     fun deleteHeldOrder(index: Int) {
-        heldOrders.removeAt(index)
-        heldOrders = heldOrders.toMutableList()
+        heldOrders = heldOrders.toMutableList().apply { removeAt(index) }
     }
 
     // Load drink products and categories from DB
@@ -121,9 +115,9 @@ fun OrdersScreen() {
 
     fun incrementCartItem(index: Int) {
         if (index in cartItems.indices) {
-            val updated = cartItems.toMutableList()
-            updated[index] = cartItems[index].copy(quantity = cartItems[index].quantity + 1)
-            cartItems = updated
+            cartItems = cartItems.toMutableList().apply {
+                set(index, this[index].copy(quantity = this[index].quantity + 1))
+            }
         }
     }
 
@@ -131,21 +125,19 @@ fun OrdersScreen() {
         if (index in cartItems.indices) {
             val q = cartItems[index].quantity
             if (q > 1) {
-                val updated = cartItems.toMutableList()
-                updated[index] = cartItems[index].copy(quantity = q - 1)
-                cartItems = updated
+                cartItems = cartItems.toMutableList().apply {
+                    set(index, this[index].copy(quantity = q - 1))
+                }
             }
         }
     }
 
     fun removeFromCart(index: Int) {
-        val updated = cartItems.toMutableList()
-        updated.removeAt(index)
-        cartItems = updated
+        cartItems = cartItems.toMutableList().apply { removeAt(index) }
     }
 
     fun clearCart() {
-        cartItems = mutableListOf()
+        cartItems = emptyList()
     }
 
     // ── Checkout Success Screen ──
@@ -154,11 +146,9 @@ fun OrdersScreen() {
             checkoutData = checkoutData!!,
             onPrintReceipt = { /* TODO: Print receipt */ },
             onNewOrder = {
-                cartItems.clear()
-                cartItems = cartItems.toMutableList()
+                cartItems = emptyList()
                 checkoutData = null
-                heldOrders.clear()
-                heldOrders = heldOrders.toMutableList()
+                heldOrders = emptyList()
             }
         )
         return
@@ -180,8 +170,7 @@ fun OrdersScreen() {
                     product = selectedProduct!!,
                     onBack = { selectedProduct = null },
                     onAddToOrder = { cartItem ->
-                        cartItems.add(cartItem)
-                        cartItems = cartItems.toMutableList()
+                        cartItems = cartItems + cartItem
                         selectedProduct = null
                     }
                 )
