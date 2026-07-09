@@ -20,11 +20,24 @@ fun DashboardScreen(
     val app = context.applicationContext as CatchUpApp
     val repository = app.productRepository
     var activeNavItem by remember { mutableStateOf(NavItem.DASHBOARD) }
-    var productCount by remember { mutableStateOf(0) }
+    var productCount by remember { mutableIntStateOf(0) }
+    var todaySales by remember { mutableDoubleStateOf(0.0) }
+    var customersServed by remember { mutableIntStateOf(0) }
 
     // Load real data from repository
     LaunchedEffect(Unit) {
         productCount = repository.getProductCount()
+        todaySales = repository.getTodaySales()
+        customersServed = repository.getTodayCustomersServed()
+    }
+
+    // Refresh data when returning to dashboard
+    LaunchedEffect(activeNavItem) {
+        if (activeNavItem == NavItem.DASHBOARD) {
+            productCount = repository.getProductCount()
+            todaySales = repository.getTodaySales()
+            customersServed = repository.getTodayCustomersServed()
+        }
     }
 
     Row(
@@ -62,7 +75,9 @@ fun DashboardScreen(
                             // KPI Dashboard Grid (4-column)
                             KPICardsGrid(
                                 productCount = productCount,
-                                drinksCount = productCount
+                                drinksCount = productCount,
+                                todaySales = todaySales,
+                                customersServed = customersServed
                             )
 
                             Spacer(modifier = Modifier.height(24.dp))

@@ -31,4 +31,10 @@ interface TransactionDao {
 
     @Query("SELECT SUM(item_count) FROM transactions")
     suspend fun getTotalItemsSold(): Int?
+
+    @Query("SELECT SUM(total) FROM transactions WHERE status = 'Completed' AND created_at >= :startOfDay")
+    suspend fun getTodaySales(startOfDay: Long): Double?
+
+    @Query("SELECT COUNT(*) FROM transactions WHERE status = 'Completed' AND created_at >= :startOfDay")
+    suspend fun getTodayCustomersServed(startOfDay: Long): Int
 }

@@ -98,4 +98,24 @@ class ProductRepository(
     suspend fun getTotalSales(): Double = transactionDao.getTotalSales() ?: 0.0
 
     suspend fun getTotalItemsSold(): Int = transactionDao.getTotalItemsSold() ?: 0
+
+    suspend fun getTodaySales(): Double {
+        val startOfDay = getStartOfDay()
+        return transactionDao.getTodaySales(startOfDay) ?: 0.0
+    }
+
+    suspend fun getTodayCustomersServed(): Int {
+        val startOfDay = getStartOfDay()
+        return transactionDao.getTodayCustomersServed(startOfDay)
+    }
+
+    private fun getStartOfDay(): Long {
+        val cal = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        return cal.timeInMillis
+    }
 }

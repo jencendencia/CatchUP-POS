@@ -31,6 +31,8 @@ data class KPICardData(
 fun KPICardsGrid(
     productCount: Int = 0,
     drinksCount: Int = 0,
+    todaySales: Double = 0.0,
+    customersServed: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val cards = listOf(
@@ -53,17 +55,17 @@ fun KPICardsGrid(
         KPICardData(
             icon = Icons.Default.TrendingUp,
             iconBgColor = IconBgAmber,
-            metric = "₱0.00",
+            metric = "₱${String.format("%,.2f", todaySales)}",
             label = "Today's Sales",
-            footer = "No orders yet today",
+            footer = if (todaySales > 0) "Sales today" else "No orders yet today",
             footerColor = OrangeMuted
         ),
         KPICardData(
             icon = Icons.Default.People,
             iconBgColor = IconBgCrimson,
-            metric = "0",
+            metric = "$customersServed",
             label = "Customers Served",
-            footer = "Start taking orders!",
+            footer = if (customersServed > 0) "Customers served today" else "Start taking orders!",
             footerColor = MutedRed
         )
     )
