@@ -148,7 +148,6 @@ fun OrdersScreen() {
             onNewOrder = {
                 cartItems = emptyList()
                 checkoutData = null
-                heldOrders = emptyList()
             }
         )
         return
@@ -292,7 +291,7 @@ fun OrdersScreen() {
         if (showPaymentDialog) {
             PaymentDialog(
                 total = subtotal,
-                onConfirm = { amountTendered ->
+                onConfirm = { amountTendered, customerName ->
                     showPaymentDialog = false
                     checkoutData = CheckoutData(
                         items = cartItems.toList(),
@@ -301,7 +300,8 @@ fun OrdersScreen() {
                         amountTendered = amountTendered,
                         changeReturned = amountTendered - subtotal,
                         transactionId = generateTransactionId(),
-                        dateTime = formatDateTime()
+                        dateTime = formatDateTime(),
+                        customerName = customerName
                     )
                 },
                 onDismiss = { showPaymentDialog = false }

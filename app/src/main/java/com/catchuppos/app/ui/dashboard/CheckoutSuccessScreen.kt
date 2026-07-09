@@ -478,10 +478,11 @@ fun formatDateTime(): String {
 @Composable
 fun PaymentDialog(
     total: Double,
-    onConfirm: (Double) -> Unit,
+    onConfirm: (Double, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var amountTendered by remember { mutableStateOf("") }
+    var customerName by remember { mutableStateOf("") }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -568,6 +569,35 @@ fun PaymentDialog(
                     )
                 )
 
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Customer Name Input (optional)
+                OutlinedTextField(
+                    value = customerName,
+                    onValueChange = { customerName = it },
+                    label = { Text("Customer Name (optional)") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Customer",
+                            tint = TextMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = OrangeAccent,
+                        unfocusedBorderColor = InputBorder,
+                        cursorColor = OrangeAccent,
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite,
+                        focusedLabelColor = OrangeAccent,
+                        unfocusedLabelColor = TextMuted
+                    )
+                )
+
                 // Change preview
                 val tenderedValue = amountTendered.toDoubleOrNull() ?: 0.0
                 if (tenderedValue >= total && tenderedValue > 0) {
@@ -632,7 +662,7 @@ fun PaymentDialog(
                     }
 
                     Button(
-                        onClick = { onConfirm(tenderedValue) },
+                        onClick = { onConfirm(tenderedValue, customerName.ifBlank { "Valued Customer" }) },
                         modifier = Modifier.weight(1f).height(48.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
