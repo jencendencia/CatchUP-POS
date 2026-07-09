@@ -1,0 +1,45 @@
+package com.catchuppos.app.theme
+
+import androidx.compose.ui.graphics.Color
+
+// Backgrounds
+val DarkBackground = Color(0xFF0D0D0D)
+val DarkSurface = Color(0xFF121212)
+val DarkCard = Color(0xFF1A1A1A)
+val DarkBorder = Color(0xFF2A2A2A)
+
+// Primary Accent
+val OrangeAccent = Color(0xFFFF6600)
+val OrangeDark = Color(0xFFF05A28)
+val OrangeMuted = Color(0xFFB3533B)
+
+// Text
+val TextWhite = Color(0xFFFFFFFF)
+val TextOffWhite = Color(0xFFF5F5F5)
+val TextMuted = Color(0xFF8C8C8C)
+val TextGray = Color(0xFF6B6B6B)
+
+// Status
+val StatusGreen = Color(0xFF00C853)
+val StatusGreenSoft = Color(0x1A00C853)
+
+// Logout
+val MutedRed = Color(0xFF8B0000)
+val DarkRed = Color(0xFF6B0000)
+
+// Card Icon Backgrounds
+val IconBgOrange = Color(0xFFFF6600)
+val IconBgRed = Color(0xFFE53935)
+val IconBgAmber = Color(0xFFFF8F00)
+val IconBgCrimson = Color(0xFFDC143C)
+
+// Navigation
+val NavActiveOrange = Color(0xFFFF6600)
+val NavInactiveText = Color(0xFFB0B0B0)
+val NavItemHover = Color(0x1AFF6600)
+
+// Input Fields
+val InputBackground = Color(0xFF1E1E1E)
+val InputBorder = Color(0xFF333333)
+val InputFocusedBorder = Color(0xFFFF6600)
+val InputPlaceholder = Color(0xFF5A5A5A)
