@@ -382,58 +382,57 @@ fun OrdersScreen() {
         }
     }
 
-        // Held Orders Dialog
-        if (showHeldOrdersDialog) {
-            HeldOrdersDialog(
-                heldOrders = heldOrders,
-                onRestoreOrder = { restoreHeldOrder(it) },
-                onDeleteOrder = { deleteHeldOrder(it) },
-                onDismiss = { showHeldOrdersDialog = false }
-            )
-        }
+    // Held Orders Dialog
+    if (showHeldOrdersDialog) {
+        HeldOrdersDialog(
+            heldOrders = heldOrders,
+            onRestoreOrder = { restoreHeldOrder(it) },
+            onDeleteOrder = { deleteHeldOrder(it) },
+            onDismiss = { showHeldOrdersDialog = false }
+        )
+    }
 
-        // Payment Dialog
-        if (showPaymentDialog) {
-            PaymentDialog(
-                total = subtotal,
-                onConfirm = { amountTendered, customerName ->
-                    showPaymentDialog = false
+    // Payment Dialog
+    if (showPaymentDialog) {
+        PaymentDialog(
+            total = subtotal,
+            onConfirm = { amountTendered, customerName ->
+                showPaymentDialog = false
 
-                    val itemsSummary = cartItems.joinToString(", ") { "${it.quantity} × ${it.product.title} (${it.size}) @ ₱${String.format("%.2f", it.unitPrice)}" }
-                    val totalItemCount = cartItems.sumOf { it.quantity }
+                val itemsSummary = cartItems.joinToString(", ") { "${it.quantity} × ${it.product.title} (${it.size}) @ ₱${String.format("%.2f", it.unitPrice)}" }
+                val totalItemCount = cartItems.sumOf { it.quantity }
 
-                    // Save transaction to database
-                    scope.launch {
-                        repository.insertTransaction(
-                            com.catchuppos.app.data.TransactionEntity(
-                                customerName = customerName,
-                                itemsJson = itemsSummary,
-                                itemCount = totalItemCount,
-                                total = subtotal,
-                                amountTendered = amountTendered,
-                                changeReturned = amountTendered - subtotal,
-                                paymentMethod = "Cash",
-                                status = "Completed",
-                                transactionId = generateTransactionId(),
-                                createdAt = System.currentTimeMillis()
-                            )
+                // Save transaction to database
+                scope.launch {
+                    repository.insertTransaction(
+                        com.catchuppos.app.data.TransactionEntity(
+                            customerName = customerName,
+                            itemsJson = itemsSummary,
+                            itemCount = totalItemCount,
+                            total = subtotal,
+                            amountTendered = amountTendered,
+                            changeReturned = amountTendered - subtotal,
+                            paymentMethod = "Cash",
+                            status = "Completed",
+                            transactionId = generateTransactionId(),
+                            createdAt = System.currentTimeMillis()
                         )
-                    }
-
-                    checkoutData = CheckoutData(
-                        items = cartItems.toList(),
-                        subtotal = subtotal,
-                        total = subtotal,
-                        amountTendered = amountTendered,
-                        changeReturned = amountTendered - subtotal,
-                        transactionId = generateTransactionId(),
-                        dateTime = formatDateTime(),
-                        customerName = customerName
                     )
-                },
-                onDismiss = { showPaymentDialog = false }
-            )
-        }
+                }
+
+                checkoutData = CheckoutData(
+                    items = cartItems.toList(),
+                    subtotal = subtotal,
+                    total = subtotal,
+                    amountTendered = amountTendered,
+                    changeReturned = amountTendered - subtotal,
+                    transactionId = generateTransactionId(),
+                    dateTime = formatDateTime(),
+                    customerName = customerName
+                )
+            },
+            onDismiss = { showPaymentDialog = false }
+        )
     }
 }
 
