@@ -1111,20 +1111,17 @@ private fun SizeVariantEditorDialog(
                                 .clip(RoundedCornerShape(10.dp))
                                 .clickable(enabled = !exists) {
                                     val basePrice = tempVariants.firstOrNull()?.sellingPrice ?: 85.0
-                                    tempVariants.add(
-                                        ProductVariantUI(
-                                            sizeName = size,
-                                            sellingPrice = basePrice + when (size) {
-                                                "16oz" -> 10.0
-                                                "22oz" -> 20.0
-                                                "Large" -> 15.0
-                                                else -> 0.0
-                                            },
-                                            isDefault = tempVariants.isEmpty(),
-                                            sortOrder = tempVariants.size
-                                        )
+                                    tempVariants = tempVariants + ProductVariantUI(
+                                        sizeName = size,
+                                        sellingPrice = basePrice + when (size) {
+                                            "16oz" -> 10.0
+                                            "22oz" -> 20.0
+                                            "Large" -> 15.0
+                                            else -> 0.0
+                                        },
+                                        isDefault = tempVariants.isEmpty(),
+                                        sortOrder = tempVariants.size
                                     )
-                                    tempVariants = tempVariants.toMutableList()
                                 },
                             shape = RoundedCornerShape(10.dp),
                             color = if (exists) DarkCard.copy(alpha = 0.5f) else DarkCard,
@@ -1173,15 +1170,12 @@ private fun SizeVariantEditorDialog(
                         onClick = {
                             val price = customPriceInput.toDoubleOrNull() ?: 0.0
                             if (customSizeInput.isNotBlank() && tempVariants.none { it.sizeName == customSizeInput.trim() }) {
-                                tempVariants.add(
-                                    ProductVariantUI(
-                                        sizeName = customSizeInput.trim(),
-                                        sellingPrice = price,
-                                        isDefault = tempVariants.isEmpty(),
-                                        sortOrder = tempVariants.size
-                                    )
+                                tempVariants = tempVariants + ProductVariantUI(
+                                    sizeName = customSizeInput.trim(),
+                                    sellingPrice = price,
+                                    isDefault = tempVariants.isEmpty(),
+                                    sortOrder = tempVariants.size
                                 )
-                                tempVariants = tempVariants.toMutableList()
                                 customSizeInput = ""
                                 customPriceInput = ""
                             }
