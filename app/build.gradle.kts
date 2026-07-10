@@ -20,9 +20,19 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("release-key.jks")
+            storePassword = "catchup123"
+            keyAlias = "catchuppos"
+            keyPassword = "catchup123"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -83,6 +93,12 @@ dependencies {
     implementation("androidx.room:room-runtime:$roomVersion")
     ksp("androidx.room:room-compiler:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
+
+    // Networking (for update checker)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Security (encrypted storage for license key)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")

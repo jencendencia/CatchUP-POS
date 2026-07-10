@@ -13,6 +13,10 @@ import androidx.compose.ui.unit.dp
 import com.catchuppos.app.CatchUpApp
 import com.catchuppos.app.auth.AuthState
 import com.catchuppos.app.theme.*
+import com.catchuppos.app.update.UpdateChecker
+import com.catchuppos.app.update.UpdateInfo
+import com.catchuppos.app.ui.update.UpdateDialog
+import kotlinx.coroutines.launch
 @Composable
 fun DashboardScreen(
     onLogout: () -> Unit = {}
@@ -25,6 +29,16 @@ fun DashboardScreen(
     var todaySales by remember { mutableDoubleStateOf(0.0) }
     var customersServed by remember { mutableIntStateOf(0) }
     val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val scope = rememberCoroutineScope()
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+
+    // Check for updates on first launch
+    LaunchedEffect(Unit) {
+        val update = UpdateChecker.checkForUpdate(context)
+        if (update != null) {
+            updateInfo = update
+        }
+    }
 
     // Load real data from repository
     LaunchedEffect(Unit) {
@@ -144,5 +158,13 @@ fun DashboardScreen(
                 }
             }
         }
+    }
+
+    // Update Dialog
+    if (updateInfo != null) {
+        UpdateDialog(
+            updateInfo = updateInfo!!,
+            onDismiss = { updateInfo = null }
+        )
     }
 }
