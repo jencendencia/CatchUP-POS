@@ -84,6 +84,7 @@ fun TransactionsScreen() {
     val totalSales = filteredTransactions.sumOf { it.total }
     val totalItemsSold = filteredTransactions.sumOf { it.itemCount }
     val completedOrders = filteredTransactions.count { it.status == "Completed" }
+    val preparingOrders = filteredTransactions.count { it.status == "Preparing" }
     val pendingOrders = filteredTransactions.count { it.status == "Pending" }
 
     Column(
@@ -129,7 +130,7 @@ fun TransactionsScreen() {
             FilterDropdown(
                 label = selectedStatus,
                 icon = Icons.Default.Flag,
-                options = listOf("All Status", "Completed", "Pending", "Canceled"),
+                options = listOf("All Status", "Completed", "Preparing", "Pending", "Canceled"),
                 onSelected = { selectedStatus = it; currentPage = 1 },
                 modifier = Modifier.weight(1f)
             )
@@ -193,6 +194,13 @@ fun TransactionsScreen() {
                 iconBg = StatusGreen,
                 value = "$completedOrders",
                 label = "Completed Orders",
+                modifier = Modifier.weight(1f)
+            )
+            MetricCard(
+                icon = Icons.Default.Refresh,
+                iconBg = Color(0xFF2196F3),
+                value = "$preparingOrders",
+                label = "Preparing Orders",
                 modifier = Modifier.weight(1f)
             )
             MetricCard(
@@ -307,7 +315,12 @@ fun TransactionsScreen() {
     if (selectedTransaction != null) {
         TransactionDetailDialog(
             transaction = selectedTransaction!!,
-            onDismiss = { selectedTransaction = null }
+            onDismiss = { selectedTransaction = null },
+            onStatusUpdated = {
+                scope.launch {
+                    allTransactions = repository.getAllTransactionsOnce()
+                }
+            }
         )
     }
 }
@@ -526,6 +539,7 @@ private fun TransactionRow(txn: TransactionEntity, onClick: () -> Unit = {}) {
                     1.dp,
                     when (txn.status) {
                         "Completed" -> StatusGreen
+                        "Preparing" -> Color(0xFF2196F3)
                         "Pending" -> Color(0xFFFFC107)
                         "Canceled" -> MutedRed
                         else -> DarkBorder
@@ -538,6 +552,7 @@ private fun TransactionRow(txn: TransactionEntity, onClick: () -> Unit = {}) {
                     style = MaterialTheme.typography.labelSmall,
                     color = when (txn.status) {
                         "Completed" -> StatusGreen
+                        "Preparing" -> Color(0xFF2196F3)
                         "Pending" -> Color(0xFFFFC107)
                         "Canceled" -> MutedRed
                         else -> TextMuted
@@ -574,11 +589,16 @@ private fun TransactionRow(txn: TransactionEntity, onClick: () -> Unit = {}) {
 @Composable
 private fun TransactionDetailDialog(
     transaction: TransactionEntity,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onStatusUpdated: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val app = context.applicationContext as CatchUpApp
     val repository = app.productRepository
+    val scope = rememberCoroutineScope()
+
+    // Use mutable state for status so UI updates immediately
+    var currentStatus by remember { mutableStateOf(transaction.status) }
 
     val dateFormatted = remember(transaction.createdAt) {
         SimpleDateFormat("MMMM dd, yyyy hh:mm a", Locale.US).format(Date(transaction.createdAt))
@@ -639,8 +659,9 @@ private fun TransactionDetailDialog(
                     color = Color.Transparent,
                     border = BorderStroke(
                         1.dp,
-                        when (transaction.status) {
+                        when (currentStatus) {
                             "Completed" -> StatusGreen
+                            "Preparing" -> Color(0xFF2196F3)
                             "Pending" -> Color(0xFFFFC107)
                             "Canceled" -> MutedRed
                             else -> DarkBorder
@@ -648,17 +669,49 @@ private fun TransactionDetailDialog(
                     )
                 ) {
                     Text(
-                        text = transaction.status,
+                        text = currentStatus,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
                         style = MaterialTheme.typography.labelMedium,
-                        color = when (transaction.status) {
+                        color = when (currentStatus) {
                             "Completed" -> StatusGreen
+                            "Preparing" -> Color(0xFF2196F3)
                             "Pending" -> Color(0xFFFFC107)
                             "Canceled" -> MutedRed
                             else -> TextMuted
                         },
                         fontWeight = FontWeight.SemiBold
                     )
+                }
+
+                // Mark as Completed button (only for Preparing status)
+                if (currentStatus == "Preparing") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                repository.updateTransactionStatus(transaction.id, "Completed")
+                                currentStatus = "Completed"
+                                onStatusUpdated()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = StatusGreen,
+                            contentColor = TextWhite
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Mark as Completed",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

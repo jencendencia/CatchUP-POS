@@ -34,6 +34,8 @@ class ProductRepository(
 
     suspend fun getProductCount(): Int = productDao.getProductCount()
 
+    suspend fun getTotalCupsAvailable(): Int = productDao.getTotalCupsAvailable()
+
     // ── Categories ──
 
     suspend fun allCategoriesOnce(): List<CategoryEntity> = categoryDao.getAllCategoriesOnce()
@@ -120,6 +122,8 @@ class ProductRepository(
     // ── Transactions ──
 
     suspend fun insertTransaction(transaction: TransactionEntity): Long = transactionDao.insertTransaction(transaction)
+
+    suspend fun updateTransactionStatus(transactionId: Int, newStatus: String) = transactionDao.updateTransactionStatus(transactionId, newStatus)
 
     suspend fun getAllTransactionsOnce(): List<TransactionEntity> = transactionDao.getAllTransactionsOnce()
 

@@ -25,7 +25,10 @@ data class UserEntity(
     val isActive: Boolean = true,
 
     @ColumnInfo(name = "created_at")
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "profile_image_path")
+    val profileImagePath: String? = null
 )
 
 enum class UserRole(val displayName: String) {

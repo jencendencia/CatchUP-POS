@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,17 +15,23 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.catchuppos.app.CatchUpApp
 import com.catchuppos.app.auth.AuthState
 import com.catchuppos.app.data.UserEntity
 import com.catchuppos.app.data.UserRole
 import com.catchuppos.app.theme.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 fun SettingsScreen() {
@@ -193,14 +200,15 @@ fun SettingsScreen() {
     if (showAddUserDialog) {
         AddEditUserDialog(
             title = "Add New User",
-            onSave = { username, email, password, role ->
+            onSave = { username, email, password, role, profileImagePath ->
                 scope.launch {
                     userRepository.insertUser(
                         UserEntity(
                             username = username,
                             email = email,
                             password = password,
-                            role = role.name
+                            role = role.name,
+                            profileImagePath = profileImagePath
                         )
                     )
                     users = userRepository.getAllUsersOnce()
@@ -216,13 +224,14 @@ fun SettingsScreen() {
         AddEditUserDialog(
             title = "Edit User",
             existingUser = editingUser!!,
-            onSave = { username, email, password, role ->
+            onSave = { username, email, password, role, profileImagePath ->
                 scope.launch {
                     val updatedUser = editingUser!!.copy(
                         username = username,
                         email = email,
                         password = if (password.isNotBlank()) password else editingUser!!.password,
-                        role = role.name
+                        role = role.name,
+                        profileImagePath = profileImagePath
                     )
                     userRepository.updateUser(updatedUser)
                     users = userRepository.getAllUsersOnce()
@@ -293,7 +302,7 @@ private fun UserCard(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(CircleShape)
                     .background(
                         if (user.role == UserRole.ADMIN.name)
                             OrangeAccent.copy(alpha = 0.15f)
@@ -302,12 +311,33 @@ private fun UserCard(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (user.role == UserRole.ADMIN.name) Icons.Default.AdminPanelSettings else Icons.Default.Person,
-                    contentDescription = null,
-                    tint = if (user.role == UserRole.ADMIN.name) OrangeAccent else TextMuted,
-                    modifier = Modifier.size(20.dp)
-                )
+                if (user.profileImagePath != null) {
+                    val bitmap = remember(user.profileImagePath) {
+                        com.catchuppos.app.util.loadAndFixBitmap(user.profileImagePath)
+                    }
+                    if (bitmap != null) {
+                        androidx.compose.foundation.Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = "Profile",
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (user.role == UserRole.ADMIN.name) Icons.Default.AdminPanelSettings else Icons.Default.Person,
+                            contentDescription = null,
+                            tint = if (user.role == UserRole.ADMIN.name) OrangeAccent else TextMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                } else {
+                    Icon(
+                        imageVector = if (user.role == UserRole.ADMIN.name) Icons.Default.AdminPanelSettings else Icons.Default.Person,
+                        contentDescription = null,
+                        tint = if (user.role == UserRole.ADMIN.name) OrangeAccent else TextMuted,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -390,7 +420,7 @@ private fun UserCard(
 private fun AddEditUserDialog(
     title: String,
     existingUser: UserEntity? = null,
-    onSave: (username: String, email: String, password: String, role: UserRole) -> Unit,
+    onSave: (username: String, email: String, password: String, role: UserRole, profileImagePath: String?) -> Unit,
     onDismiss: () -> Unit
 ) {
     var username by remember { mutableStateOf(existingUser?.username ?: "") }
@@ -401,6 +431,17 @@ private fun AddEditUserDialog(
         if (existingUser?.role == UserRole.ADMIN.name) UserRole.ADMIN else UserRole.USER
     ) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var profileImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var savedProfilePath by remember { mutableStateOf<String?>(existingUser?.profileImagePath) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        profileImageUri = uri
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -503,6 +544,64 @@ private fun AddEditUserDialog(
                     singleLine = true
                 )
 
+                // Profile Picture
+                Text("Profile Picture", color = TextMuted, style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Profile picture preview
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(OrangeAccent.copy(alpha = 0.15f))
+                            .clickable { imagePickerLauncher.launch("image/*") },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val displayPath = profileImageUri?.let { null } ?: savedProfilePath
+                        if (profileImageUri != null) {
+                            val bitmap = remember(profileImageUri) {
+                                try {
+                                    context.contentResolver.openInputStream(profileImageUri!!)?.use { stream ->
+                                        android.graphics.BitmapFactory.decodeStream(stream)
+                                    }
+                                } catch (e: Exception) { null }
+                            }
+                            if (bitmap != null) {
+                                androidx.compose.foundation.Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Profile",
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(Icons.Default.Person, contentDescription = null, tint = OrangeAccent, modifier = Modifier.size(28.dp))
+                            }
+                        } else if (displayPath != null) {
+                            val bitmap = remember(displayPath) {
+                                com.catchuppos.app.util.loadAndFixBitmap(displayPath)
+                            }
+                            if (bitmap != null) {
+                                androidx.compose.foundation.Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Profile",
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(Icons.Default.Person, contentDescription = null, tint = OrangeAccent, modifier = Modifier.size(28.dp))
+                            }
+                        } else {
+                            Icon(Icons.Default.Person, contentDescription = null, tint = OrangeAccent, modifier = Modifier.size(28.dp))
+                        }
+                    }
+                    TextButton(onClick = { imagePickerLauncher.launch("image/*") }) {
+                        Text("Upload Photo", color = OrangeAccent, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
                 // Role Selection
                 Text("Role", color = TextMuted, style = MaterialTheme.typography.labelMedium)
                 Row(
@@ -547,7 +646,16 @@ private fun AddEditUserDialog(
                         password.isBlank() && existingUser == null -> errorMessage = "Password is required"
                         password != confirmPassword -> errorMessage = "Passwords do not match"
                         else -> {
-                            onSave(username.trim(), email.trim(), password, selectedRole)
+                            scope.launch {
+                                val imagePath = if (profileImageUri != null) {
+                                    withContext(Dispatchers.IO) {
+                                        saveProfileImageToInternalStorage(context, profileImageUri!!)
+                                    }
+                                } else {
+                                    savedProfilePath
+                                }
+                                onSave(username.trim(), email.trim(), password, selectedRole, imagePath)
+                            }
                         }
                     }
                 },
@@ -562,4 +670,23 @@ private fun AddEditUserDialog(
             }
         }
     )
+}
+
+// ── Profile Image Save Helper ──
+
+private fun saveProfileImageToInternalStorage(context: android.content.Context, uri: android.net.Uri): String? {
+    return try {
+        val imagesDir = java.io.File(context.filesDir, "profile_images")
+        if (!imagesDir.exists()) imagesDir.mkdirs()
+        val fileName = "profile_${System.currentTimeMillis()}.jpg"
+        val file = java.io.File(imagesDir, fileName)
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            file.outputStream().use { output ->
+                input.copyTo(output)
+            }
+        }
+        file.absolutePath
+    } catch (e: Exception) {
+        null
+    }
 }

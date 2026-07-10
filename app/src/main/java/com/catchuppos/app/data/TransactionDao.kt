@@ -37,4 +37,7 @@ interface TransactionDao {
 
     @Query("SELECT COUNT(*) FROM transactions WHERE status = 'Completed' AND created_at >= :startOfDay")
     suspend fun getTodayCustomersServed(startOfDay: Long): Int
+
+    @Query("UPDATE transactions SET status = :newStatus WHERE id = :transactionId")
+    suspend fun updateTransactionStatus(transactionId: Int, newStatus: String)
 }

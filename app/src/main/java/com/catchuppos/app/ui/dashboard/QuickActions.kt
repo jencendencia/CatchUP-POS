@@ -41,7 +41,7 @@ fun QuickActionsSection(
         QuickActionData(
             label = "View Orders",
             icon = Icons.Default.Assignment,
-            contentColor = MutedRed,
+            contentColor = Color(0xFFD71315),
             onClick = onViewOrdersClick
         ),
         QuickActionData(
@@ -53,7 +53,7 @@ fun QuickActionsSection(
         QuickActionData(
             label = "Reports",
             icon = Icons.Default.BarChart,
-            contentColor = MutedRed,
+            contentColor = Color(0xFFD71315),
             onClick = onReportsClick
         )
     )

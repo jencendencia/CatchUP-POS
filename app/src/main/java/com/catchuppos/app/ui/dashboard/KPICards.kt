@@ -1,6 +1,7 @@
 package com.catchuppos.app.ui.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -24,32 +26,35 @@ data class KPICardData(
     val label: String,
     val footer: String,
     val footerColor: androidx.compose.ui.graphics.Color,
-    val iconTint: androidx.compose.ui.graphics.Color = TextWhite
+    val iconTint: androidx.compose.ui.graphics.Color = TextWhite,
+    val isClickable: Boolean = false
 )
 
 @Composable
 fun KPICardsGrid(
-    productCount: Int = 0,
-    drinksCount: Int = 0,
+    totalOrders: Int = 0,
+    drinksSold: Int = 0,
     todaySales: Double = 0.0,
-    customersServed: Int = 0,
+    totalDrinksAvailable: Int = 0,
+    cupsAvailable: Int = 0,
+    onCupsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val cards = listOf(
         KPICardData(
-            icon = Icons.Default.ShoppingBag,
+            icon = Icons.Default.Receipt,
             iconBgColor = IconBgOrange,
-            metric = "$productCount",
-            label = "Products",
-            footer = "Active menu items",
+            metric = "$totalOrders",
+            label = "Number of Orders",
+            footer = "Today's Sales: ₱${String.format("%,.2f", todaySales)}",
             footerColor = OrangeMuted
         ),
         KPICardData(
             icon = Icons.Default.Coffee,
             iconBgColor = IconBgRed,
-            metric = "$drinksCount",
-            label = "Drinks Available",
-            footer = "Beverages on menu",
+            metric = "$drinksSold",
+            label = "Drinks Sold",
+            footer = "Items ($totalDrinksAvailable drinks available)",
             footerColor = MutedRed
         ),
         KPICardData(
@@ -61,12 +66,13 @@ fun KPICardsGrid(
             footerColor = OrangeMuted
         ),
         KPICardData(
-            icon = Icons.Default.People,
-            iconBgColor = IconBgCrimson,
-            metric = "$customersServed",
-            label = "Customers Served",
-            footer = if (customersServed > 0) "Customers served today" else "Start taking orders!",
-            footerColor = MutedRed
+            icon = Icons.Default.Coffee,
+            iconBgColor = Color(0xFF2196F3),
+            metric = "$cupsAvailable",
+            label = "Cups Available",
+            footer = if (cupsAvailable > 0) "Tap to manage" else "Tap to set cups",
+            footerColor = Color(0xFF2196F3),
+            isClickable = true
         )
     )
 
@@ -76,10 +82,11 @@ fun KPICardsGrid(
             .padding(horizontal = 28.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        cards.forEach { card ->
+        cards.forEachIndexed { index, card ->
             KPIStatCard(
                 data = card,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                onClick = if (card.isClickable) onCupsClick else null
             )
         }
     }
@@ -88,10 +95,13 @@ fun KPICardsGrid(
 @Composable
 private fun KPIStatCard(
     data: KPICardData,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
 ) {
     Card(
-        modifier = modifier.height(130.dp),
+        modifier = modifier
+            .height(130.dp)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)

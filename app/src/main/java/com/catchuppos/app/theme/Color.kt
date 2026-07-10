@@ -24,14 +24,14 @@ val StatusGreen = Color(0xFF00C853)
 val StatusGreenSoft = Color(0x1A00C853)
 
 // Logout
-val MutedRed = Color(0xFF8B0000)
-val DarkRed = Color(0xFF6B0000)
+val MutedRed = Color(0xFFD71313)
+val DarkRed = Color(0xFFB01010)
 
 // Card Icon Backgrounds
-val IconBgOrange = Color(0xFFFF6600)
-val IconBgRed = Color(0xFFE53935)
+val IconBgOrange = Color(0xFFEC6A08)
+val IconBgRed = Color(0xFFD71313)
 val IconBgAmber = Color(0xFFFF8F00)
-val IconBgCrimson = Color(0xFFDC143C)
+val IconBgCrimson = Color(0xFFD71313)
 
 // Navigation
 val NavActiveOrange = Color(0xFFFF6600)

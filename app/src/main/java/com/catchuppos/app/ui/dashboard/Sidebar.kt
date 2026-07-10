@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -38,7 +39,7 @@ enum class NavItem(
     DASHBOARD("Dashboard", Icons.Filled.Speed, Icons.Outlined.Speed),
     ORDERS("Orders", Icons.Filled.Receipt, Icons.Outlined.Receipt),
     PRODUCTS("Products", Icons.Filled.Inventory2, Icons.Outlined.Inventory2),
-    TRANSACTIONS("Transactions", Icons.Filled.SwapHoriz, Icons.Outlined.SwapHoriz, adminOnly = true),
+    TRANSACTIONS("Transactions", Icons.Filled.SwapHoriz, Icons.Outlined.SwapHoriz),
     REPORTS("Reports", Icons.Filled.BarChart, Icons.Outlined.BarChart, adminOnly = true),
     CUSTOMERS("Customers", Icons.Filled.People, Icons.Outlined.People, adminOnly = true),
     SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings, adminOnly = true)
@@ -53,10 +54,41 @@ fun Sidebar(
     val configuration = LocalConfiguration.current
     val isPortrait = configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
     var isCollapsed by remember { mutableStateOf(isPortrait) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
 
     // Auto-collapse/expand on orientation change
     LaunchedEffect(isPortrait) {
         isCollapsed = isPortrait
+    }
+
+    // Logout Confirmation Dialog
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            containerColor = Color(0xFF1A1A1A),
+            title = {
+                Text("Log Out", color = TextWhite, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text("Are you sure you want to log out?", color = TextMuted)
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showLogoutDialog = false
+                        onLogout()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MutedRed)
+                ) {
+                    Text("Log Out")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text("Cancel", color = TextMuted)
+                }
+            }
+        )
     }
 
     val sidebarWidth = if (isCollapsed) 72.dp else 240.dp
@@ -148,6 +180,66 @@ fun Sidebar(
                 }
             }
 
+            // User Profile Section
+            if (AuthState.currentUser != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = if (isCollapsed) 8.dp else 12.dp)
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = if (isCollapsed) Arrangement.Center else Arrangement.spacedBy(10.dp)
+                ) {
+                    // Profile Picture
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(OrangeAccent.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val profilePath = AuthState.currentUser?.profileImagePath
+                        if (profilePath != null) {
+                            val bitmap = remember(profilePath) {
+                                com.catchuppos.app.util.loadAndFixBitmap(profilePath)
+                            }
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Profile",
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = OrangeAccent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = OrangeAccent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    if (!isCollapsed) {
+                        Text(
+                            text = AuthState.currentUser?.username ?: "",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = TextWhite,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
             // Divider before logout
             HorizontalDivider(
                 color = DarkBorder,
@@ -163,7 +255,7 @@ fun Sidebar(
                     .fillMaxWidth()
                     .padding(horizontal = if (isCollapsed) 8.dp else 12.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .clickable { onLogout() }
+                    .clickable { showLogoutDialog = true }
                     .padding(
                         horizontal = if (isCollapsed) 0.dp else 16.dp,
                         vertical = 14.dp

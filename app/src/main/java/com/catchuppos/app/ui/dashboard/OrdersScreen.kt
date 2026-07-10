@@ -1,5 +1,6 @@
 package com.catchuppos.app.ui.dashboard
 
+import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,8 +34,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import com.catchuppos.app.CatchUpApp
 import com.catchuppos.app.data.OrderItemEntity
 import com.catchuppos.app.data.ProductEntity
+import com.catchuppos.app.data.ProductVariantEntity
 import com.catchuppos.app.theme.*
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
 // ── Cart Data Model ──
 
@@ -47,11 +52,74 @@ data class CartItem(
     val specialInstructions: String = ""
 )
 
+// ── Held Orders Persistence ──
+
+private fun saveHeldOrders(context: Context, heldOrders: List<List<CartItem>>) {
+    val prefs = context.getSharedPreferences("catchup_pos_prefs", Context.MODE_PRIVATE)
+    val jsonArray = JSONArray()
+    heldOrders.forEach { order ->
+        val orderArray = JSONArray()
+        order.forEach { item ->
+            val obj = JSONObject()
+            obj.put("productId", item.product.id)
+            obj.put("quantity", item.quantity)
+            obj.put("size", item.size)
+            obj.put("unitPrice", item.unitPrice)
+            obj.put("sugarLevel", item.sugarLevel)
+            obj.put("iceLevel", item.iceLevel)
+            obj.put("specialInstructions", item.specialInstructions)
+            orderArray.put(obj)
+        }
+        jsonArray.put(orderArray)
+    }
+    prefs.edit().putString("held_orders", jsonArray.toString()).apply()
+}
+
+private fun loadHeldOrders(context: Context, allProducts: List<ProductEntity>): List<List<CartItem>> {
+    val prefs = context.getSharedPreferences("catchup_pos_prefs", Context.MODE_PRIVATE)
+    val json = prefs.getString("held_orders", null) ?: return emptyList()
+    return try {
+        val jsonArray = JSONArray(json)
+        (0 until jsonArray.length()).mapNotNull { i ->
+            val orderArray = jsonArray.getJSONArray(i)
+            (0 until orderArray.length()).mapNotNull { j ->
+                val obj = orderArray.getJSONObject(j)
+                val product = allProducts.find { it.id == obj.getInt("productId") } ?: return@mapNotNull null
+                CartItem(
+                    product = product,
+                    quantity = obj.getInt("quantity"),
+                    size = obj.getString("size"),
+                    unitPrice = obj.getDouble("unitPrice"),
+                    sugarLevel = obj.getString("sugarLevel"),
+                    iceLevel = obj.getString("iceLevel"),
+                    specialInstructions = obj.getString("specialInstructions")
+                )
+            }.takeIf { it.isNotEmpty() }
+        }
+    } catch (e: Exception) {
+        emptyList()
+    }
+}
+
+// ── Cups Persistence ──
+
+private fun loadCupCount(context: Context): Int {
+    val prefs = context.getSharedPreferences("catchup_pos_prefs", Context.MODE_PRIVATE)
+    return prefs.getInt("cups_available", 0)
+}
+
+private fun saveCupCount(context: Context, count: Int) {
+    val prefs = context.getSharedPreferences("catchup_pos_prefs", Context.MODE_PRIVATE)
+    prefs.edit().putInt("cups_available", count).apply()
+}
+
 // ── Main Orders Screen ──
 
 @Composable
-fun OrdersScreen() {
-    val context = androidx.compose.ui.platform.LocalContext.current
+fun OrdersScreen(
+    onOrderComplete: () -> Unit = {}
+) {
+    val context = LocalContext.current
     val app = context.applicationContext as CatchUpApp
     val repository = app.productRepository
     val scope = rememberCoroutineScope()
@@ -67,10 +135,12 @@ fun OrdersScreen() {
     var showHeldOrdersDialog by remember { mutableStateOf(false) }
     var showPaymentDialog by remember { mutableStateOf(false) }
     var checkoutData by remember { mutableStateOf<CheckoutData?>(null) }
+    var cupsAvailable by remember { mutableIntStateOf(loadCupCount(context)) }
 
     fun holdOrder() {
         if (cartItems.isNotEmpty()) {
             heldOrders = heldOrders + listOf(cartItems)
+            saveHeldOrders(context, heldOrders)
             cartItems = emptyList()
         }
     }
@@ -78,17 +148,21 @@ fun OrdersScreen() {
     fun restoreHeldOrder(index: Int) {
         cartItems = heldOrders[index]
         heldOrders = heldOrders.toMutableList().apply { removeAt(index) }
+        saveHeldOrders(context, heldOrders)
     }
 
     fun deleteHeldOrder(index: Int) {
         heldOrders = heldOrders.toMutableList().apply { removeAt(index) }
+        saveHeldOrders(context, heldOrders)
     }
 
-    // Load drink products and categories from DB
+    // Load drink products, categories, and held orders from DB
     LaunchedEffect(Unit) {
         val allProducts = repository.allProductsOnce()
         drinkProducts = allProducts.filter { it.type == "DRINK" }
         dbCategories = repository.allCategoriesOnce()
+        heldOrders = loadHeldOrders(context, allProducts)
+        cupsAvailable = loadCupCount(context)
     }
 
     // Filtered products
@@ -150,6 +224,7 @@ fun OrdersScreen() {
             onNewOrder = {
                 cartItems = emptyList()
                 checkoutData = null
+                onOrderComplete()
             }
         )
         return
@@ -280,12 +355,12 @@ fun OrdersScreen() {
                 onViewHeldOrders = { showHeldOrdersDialog = true },
                 onIncrementItem = { incrementCartItem(it) },
                 onDecrementItem = { decrementCartItem(it) },
-                onCheckout = { showPaymentDialog = true }
+                onCheckout = { if (cartItems.isNotEmpty()) showPaymentDialog = true }
             )
         }
     } else {
-        // Portrait mode: Column layout
-        Column(
+        // Portrait mode: Row layout (catalog left, order panel right)
+        Row(
             modifier = Modifier
                 .fillMaxSize()
                 .background(DarkBackground)
@@ -294,7 +369,7 @@ fun OrdersScreen() {
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
+                    .fillMaxHeight()
             ) {
                 if (selectedProduct != null) {
                     ItemCustomizationSheet(
@@ -365,7 +440,7 @@ fun OrdersScreen() {
                 }
             }
 
-            // Order panel at the bottom in portrait
+            // Order panel on the right
             CurrentOrderPanel(
                 cartItems = cartItems,
                 totalItemCount = totalItemCount,
@@ -377,8 +452,7 @@ fun OrdersScreen() {
                 onViewHeldOrders = { showHeldOrdersDialog = true },
                 onIncrementItem = { incrementCartItem(it) },
                 onDecrementItem = { decrementCartItem(it) },
-                onCheckout = { showPaymentDialog = true },
-                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)
+                onCheckout = { if (cartItems.isNotEmpty()) showPaymentDialog = true }
             )
         }
     }
@@ -397,7 +471,7 @@ fun OrdersScreen() {
     if (showPaymentDialog) {
         PaymentDialog(
             total = subtotal,
-            onConfirm = { amountTendered, customerName ->
+            onConfirm = { amountTendered, customerName, paymentMethod ->
                 showPaymentDialog = false
 
                 val itemsSummary = cartItems.joinToString(", ") { "${it.quantity} × ${it.product.title} (${it.size}) @ ₱${String.format("%.2f", it.unitPrice)}" }
@@ -413,8 +487,8 @@ fun OrdersScreen() {
                             total = subtotal,
                             amountTendered = amountTendered,
                             changeReturned = amountTendered - subtotal,
-                            paymentMethod = "Cash",
-                            status = "Completed",
+                            paymentMethod = paymentMethod,
+                            status = "Preparing",
                             transactionId = generateTransactionId(),
                             cashierId = com.catchuppos.app.auth.AuthState.currentUser?.id ?: 0,
                             cashierName = com.catchuppos.app.auth.AuthState.currentUser?.username ?: "",
@@ -435,6 +509,13 @@ fun OrdersScreen() {
                         )
                     }
                     repository.insertOrderItems(orderItems)
+
+                    // Deduct cups for drink orders (each drink uses 1 cup)
+                    val drinkCount = cartItems.filter { it.product.type == "DRINK" }.sumOf { it.quantity }
+                    if (drinkCount > 0) {
+                        cupsAvailable = maxOf(0, cupsAvailable - drinkCount)
+                        saveCupCount(context, cupsAvailable)
+                    }
                 }
 
                 checkoutData = CheckoutData(
@@ -445,7 +526,8 @@ fun OrdersScreen() {
                     changeReturned = amountTendered - subtotal,
                     transactionId = generateTransactionId(),
                     dateTime = formatDateTime(),
-                    customerName = customerName
+                    customerName = customerName,
+                    paymentMethod = paymentMethod
                 )
             },
             onDismiss = { showPaymentDialog = false }
@@ -524,6 +606,7 @@ private fun MenuItemCard(
         modifier = modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
@@ -619,7 +702,7 @@ private fun CatalogBottomToolbar(
                 )
             },
             singleLine = true,
-            modifier = Modifier.weight(1f).height(46.dp),
+            modifier = Modifier.weight(1f).height(52.dp),
             shape = RoundedCornerShape(10.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = OrangeAccent,
@@ -634,7 +717,7 @@ private fun CatalogBottomToolbar(
         // Categories Button
         OutlinedButton(
             onClick = onCategoriesClick,
-            modifier = Modifier.height(46.dp),
+            modifier = Modifier.height(52.dp),
             shape = RoundedCornerShape(10.dp),
             border = BorderStroke(1.dp, DarkBorder),
             colors = ButtonDefaults.outlinedButtonColors(
@@ -939,8 +1022,10 @@ private fun CurrentOrderPanel(
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = OrangeAccent,
-                        contentColor = TextWhite
+                        contentColor = TextWhite,
+                        disabledContainerColor = OrangeAccent.copy(alpha = 0.4f)
                     ),
+                    enabled = cartItems.isNotEmpty(),
                     elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
                 ) {
                     Icon(
@@ -1198,6 +1283,7 @@ private fun HeldOrdersDialog(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .clickable { onRestoreOrder(index) }
                                         .padding(12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -1302,12 +1388,16 @@ private fun ItemCustomizationSheet(
     }
 
     val sizes = if (productVariants.isNotEmpty()) productVariants.map { it.sizeName } else listOf("12oz", "16oz", "22oz")
-    var selectedSize by remember {
-        val defaultVariant = productVariants.firstOrNull { it.isDefault }
-        mutableStateOf(defaultVariant?.sizeName ?: sizes.getOrElse(1) { sizes.firstOrNull() ?: "16oz" })
-    }
-    var selectedVariant by remember {
-        mutableStateOf(productVariants.firstOrNull { it.isDefault } ?: productVariants.firstOrNull())
+    var selectedSize by remember { mutableStateOf("") }
+    var selectedVariant by remember { mutableStateOf<ProductVariantEntity?>(null) }
+
+    // Sync selected size/variant when variants load
+    LaunchedEffect(productVariants) {
+        if (productVariants.isNotEmpty() && selectedVariant == null) {
+            val defaultVariant = productVariants.firstOrNull { it.isDefault } ?: productVariants.firstOrNull()
+            selectedVariant = defaultVariant
+            selectedSize = defaultVariant?.sizeName ?: sizes.firstOrNull() ?: "16oz"
+        }
     }
     var sugarLevel by remember { mutableStateOf("100%") }
     var iceLevel by remember { mutableStateOf("Regular Ice") }
@@ -1354,7 +1444,7 @@ private fun ItemCustomizationSheet(
             // Product Image
             Box(
                 modifier = Modifier
-                    .size(140.dp)
+                    .size(200.dp)
                     .clip(RoundedCornerShape(16.dp))
                     .background(OrangeAccent.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center

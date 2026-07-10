@@ -2,6 +2,7 @@ package com.catchuppos.app.ui.dashboard
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -17,9 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,7 +43,8 @@ data class CheckoutData(
     val dateTime: String,
     val terminal: String = "Terminal 01",
     val cashier: String = "Admin",
-    val customerName: String = "Sir Lyme"
+    val customerName: String = "Sir Lyme",
+    val paymentMethod: String = "Cash"
 )
 
 // ════════════════════════════════════════════════════════════════════
@@ -162,8 +167,15 @@ fun CheckoutSuccessScreen(
                         tint = OrangeAccent,
                         modifier = Modifier.size(24.dp)
                     )
+                    val thankYouText = buildAnnotatedString {
+                        append("Thank you ")
+                        withStyle(SpanStyle(color = Color(0xFFFFC107), fontWeight = FontWeight.Bold)) {
+                            append(checkoutData.customerName)
+                        }
+                        append(" for choosing Catch Up. We will call your name with a bell if we finish preparing your coffee. 😊")
+                    }
                     Text(
-                        text = "Thank you ${checkoutData.customerName} for choosing Catch Up. We will call your name with a bell if we finish preparing your coffee. 😊",
+                        text = thankYouText,
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextWhite,
                         modifier = Modifier.weight(1f)
@@ -365,7 +377,7 @@ fun CheckoutSuccessScreen(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 
-                ReceiptInfoRow("Payment Method", "Cash")
+                ReceiptInfoRow("Payment Method", checkoutData.paymentMethod)
                 ReceiptInfoRow("Amount Tendered", "₱${String.format("%.2f", checkoutData.amountTendered)}")
                 ReceiptInfoRow("Change Returned", "₱${String.format("%.2f", checkoutData.changeReturned)}", valueColor = StatusGreen)
 
@@ -478,15 +490,19 @@ fun formatDateTime(): String {
 @Composable
 fun PaymentDialog(
     total: Double,
-    onConfirm: (Double, String) -> Unit,
+    onConfirm: (Double, String, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var amountTendered by remember { mutableStateOf("") }
     var customerName by remember { mutableStateOf("") }
+    var selectedPaymentMethod by remember { mutableStateOf("Cash") }
 
     Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        onDismissRequest = { },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = false
+        )
     ) {
         Surface(
             modifier = Modifier
@@ -537,6 +553,54 @@ fun PaymentDialog(
                             color = OrangeAccent,
                             fontWeight = FontWeight.Bold
                         )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Payment Method Selector
+                Text(
+                    text = "Payment Method",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = TextMuted,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    listOf("Cash", "GCash").forEach { method ->
+                        val isSelected = selectedPaymentMethod == method
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { selectedPaymentMethod = method },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) OrangeAccent else DarkCard,
+                            border = if (isSelected) null else BorderStroke(1.dp, DarkBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (method == "Cash") Icons.Default.Money else Icons.Default.PhoneAndroid,
+                                    contentDescription = null,
+                                    tint = if (isSelected) TextWhite else TextMuted,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = method,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = if (isSelected) TextWhite else TextMuted,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -662,7 +726,7 @@ fun PaymentDialog(
                     }
 
                     Button(
-                        onClick = { onConfirm(tenderedValue, customerName.ifBlank { "Valued Customer" }) },
+                        onClick = { onConfirm(tenderedValue, customerName.ifBlank { "Valued Customer" }, selectedPaymentMethod) },
                         modifier = Modifier.weight(1f).height(48.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(

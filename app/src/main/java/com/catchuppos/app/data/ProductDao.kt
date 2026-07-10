@@ -54,4 +54,7 @@ interface ProductDao {
 
     @Query("SELECT COUNT(*) FROM products")
     suspend fun getProductCount(): Int
+
+    @Query("SELECT COALESCE(SUM(quantity), 0) FROM products WHERE type = 'DRINK'")
+    suspend fun getTotalCupsAvailable(): Int
 }

@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -220,6 +221,7 @@ fun ProductsScreen(
         Column(
             modifier = modifier
                 .fillMaxSize()
+                .background(DarkBackground)
         ) {
             // --- Top Controls: Category Pills + Search + Add Button ---
             ProductsTopBar(
@@ -276,7 +278,7 @@ fun ProductsScreen(
                             // Product Cards Grid — responsive columns
                             val configuration = LocalConfiguration.current
                             val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                            val gridColumns = if (isLandscape) 5 else 3
+                            val gridColumns = if (isLandscape) 6 else 4
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 products.chunked(gridColumns).forEach { rowProducts ->
                                     Row(
@@ -385,7 +387,7 @@ private fun ProductsTopBar(
                     )
                 },
                 singleLine = true,
-                modifier = Modifier.weight(1f).height(48.dp),
+                modifier = Modifier.weight(1f).height(52.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = OrangeAccent,
@@ -401,7 +403,7 @@ private fun ProductsTopBar(
             if (AuthState.isAdmin) {
                 Button(
                     onClick = onAddProduct,
-                    modifier = Modifier.height(48.dp),
+                    modifier = Modifier.height(52.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = OrangeAccent,
@@ -467,6 +469,7 @@ private fun ProductCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Box {
@@ -475,42 +478,43 @@ private fun ProductCard(
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .size(22.dp)
-                        .padding(top = 2.dp, end = 2.dp)
+                        .size(44.dp)
+                        .padding(top = 4.dp, end = 4.dp)
+                        .zIndex(2f)
                         .clickable { showMenu = true }
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.MoreVert,
                         contentDescription = "More actions",
                         tint = TextMuted,
-                        modifier = Modifier.size(12.dp)
+                        modifier = Modifier.size(24.dp)
                     )
-                }
 
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Edit", color = TextWhite) },
-                        onClick = {
-                            showMenu = false
-                            onEdit()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.Edit, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp))
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete", color = MutedRed) },
-                        onClick = {
-                            showMenu = false
-                            onDelete()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.Delete, contentDescription = null, tint = MutedRed, modifier = Modifier.size(18.dp))
-                        }
-                    )
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Edit", color = TextWhite) },
+                            onClick = {
+                                showMenu = false
+                                onEdit()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Edit, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp))
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete", color = MutedRed) },
+                            onClick = {
+                                showMenu = false
+                                onDelete()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Delete, contentDescription = null, tint = MutedRed, modifier = Modifier.size(18.dp))
+                            }
+                        )
+                    }
                 }
             }
 
@@ -1516,8 +1520,8 @@ private fun AddProductScreen(
     var description by remember(editingProduct) { mutableStateOf(editingProduct?.description ?: "") }
     var isActive by remember(editingProduct) { mutableStateOf(editingProduct?.isActive ?: true) }
 
-    var sellingPrice by remember(editingProduct) { mutableStateOf(editingProduct?.sellingPrice?.let { String.format("%.2f", it) } ?: "0.00") }
-    var costPrice by remember(editingProduct) { mutableStateOf(editingProduct?.costPrice?.let { String.format("%.2f", it) } ?: "0.00") }
+    var sellingPrice by remember(editingProduct) { mutableStateOf(editingProduct?.sellingPrice?.let { if (it > 0) String.format("%.2f", it) else "" } ?: "") }
+    var costPrice by remember(editingProduct) { mutableStateOf(editingProduct?.costPrice?.let { if (it > 0) String.format("%.2f", it) else "" } ?: "") }
 
     var trackInventory by remember(editingProduct) { mutableStateOf(editingProduct?.trackInventory ?: false) }
     var quantity by remember(editingProduct) { mutableStateOf((editingProduct?.quantity ?: 0).toString()) }
@@ -1856,6 +1860,7 @@ private fun AddProductScreen(
                         label = "Selling Price (₱)",
                         required = true
                     )
+                    val isPriceZero = sellingPrice == "0" || sellingPrice == "0.0" || sellingPrice == "0.00"
                     OutlinedTextField(
                         value = sellingPrice,
                         onValueChange = { newVal ->
@@ -1866,10 +1871,27 @@ private fun AddProductScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
                         singleLine = true,
-                        prefix = { Text("₱", color = TextWhite, fontWeight = FontWeight.Bold) },
+                        prefix = { Text("₱", color = if (isPriceZero) MutedRed else TextWhite, fontWeight = FontWeight.Bold) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        colors = formFieldColors()
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = if (isPriceZero) MutedRed else OrangeAccent,
+                            unfocusedBorderColor = if (isPriceZero) MutedRed else InputBorder,
+                            cursorColor = if (isPriceZero) MutedRed else OrangeAccent,
+                            focusedTextColor = if (isPriceZero) MutedRed else TextWhite,
+                            unfocusedTextColor = if (isPriceZero) MutedRed else TextWhite,
+                            focusedLabelColor = if (isPriceZero) MutedRed else OrangeAccent,
+                            unfocusedLabelColor = TextMuted
+                        )
                     )
+                    if (isPriceZero) {
+                        Text(
+                            text = "Price cannot be zero",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MutedRed,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
