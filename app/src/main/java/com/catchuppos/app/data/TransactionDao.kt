@@ -26,16 +26,16 @@ interface TransactionDao {
     @Query("SELECT COUNT(*) FROM transactions WHERE status = :status")
     suspend fun getTransactionCountByStatus(status: String): Int
 
-    @Query("SELECT SUM(total) FROM transactions WHERE status = 'Completed'")
+    @Query("SELECT SUM(total) FROM transactions")
     suspend fun getTotalSales(): Double?
 
     @Query("SELECT SUM(item_count) FROM transactions")
     suspend fun getTotalItemsSold(): Int?
 
-    @Query("SELECT SUM(total) FROM transactions WHERE status = 'Completed' AND created_at >= :startOfDay")
+    @Query("SELECT SUM(total) FROM transactions WHERE created_at >= :startOfDay")
     suspend fun getTodaySales(startOfDay: Long): Double?
 
-    @Query("SELECT COUNT(*) FROM transactions WHERE status = 'Completed' AND created_at >= :startOfDay")
+    @Query("SELECT COUNT(*) FROM transactions WHERE created_at >= :startOfDay")
     suspend fun getTodayCustomersServed(startOfDay: Long): Int
 
     @Query("UPDATE transactions SET status = :newStatus WHERE id = :transactionId")

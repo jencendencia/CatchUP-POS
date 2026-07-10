@@ -26,7 +26,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
+import android.media.MediaPlayer
 import com.catchuppos.app.theme.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -57,6 +59,16 @@ fun CheckoutSuccessScreen(
     onPrintReceipt: () -> Unit = {},
     onNewOrder: () -> Unit = {}
 ) {
+    val context = LocalContext.current
+
+    DisposableEffect(Unit) {
+        val mediaPlayer = MediaPlayer.create(context, context.resources.getIdentifier("thank_you", "raw", context.packageName))
+        mediaPlayer?.start()
+        onDispose {
+            mediaPlayer?.release()
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxSize()

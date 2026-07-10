@@ -217,7 +217,12 @@ fun DashboardScreen(
                     }
 
                     NavItem.SETTINGS -> {
-                        SettingsScreen()
+                        SettingsScreen(
+                            onRestoreComplete = {
+                                // AuthState.logout() already called inside SettingsScreen
+                                onLogout()
+                            }
+                        )
                     }
 
                     else -> {

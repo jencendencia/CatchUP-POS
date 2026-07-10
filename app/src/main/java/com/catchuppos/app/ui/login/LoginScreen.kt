@@ -207,9 +207,15 @@ fun LoginScreen(
                                 isLoading = true
                                 errorMessage = null
                                 scope.launch {
-                                    val user = app.userRepository.login(email.trim(), password)
-                                    if (user != null) {
-                                        AuthState.login(user)
+                                    var user = app.userRepository.login(email.trim(), password)
+                                    if (user == null) {
+                                        // Try seeding admin in case DB was just restored
+                                        app.userRepository.seedDefaultAdmin()
+                                        user = app.userRepository.login(email.trim(), password)
+                                    }
+                                    val loggedInUser = user
+                                    if (loggedInUser != null) {
+                                        AuthState.login(loggedInUser)
                                         onLoginSuccess()
                                     } else {
                                         errorMessage = "Invalid email or password"
@@ -245,9 +251,15 @@ fun LoginScreen(
                             isLoading = true
                             errorMessage = null
                             scope.launch {
-                                val user = app.userRepository.login(email.trim(), password)
-                                if (user != null) {
-                                    AuthState.login(user)
+                                var user = app.userRepository.login(email.trim(), password)
+                                if (user == null) {
+                                    // Try seeding admin in case DB was just restored
+                                    app.userRepository.seedDefaultAdmin()
+                                    user = app.userRepository.login(email.trim(), password)
+                                }
+                                val loggedInUser = user
+                                if (loggedInUser != null) {
+                                    AuthState.login(loggedInUser)
                                     onLoginSuccess()
                                 } else {
                                     errorMessage = "Invalid email or password"

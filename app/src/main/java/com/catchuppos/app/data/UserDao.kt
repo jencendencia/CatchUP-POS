@@ -36,4 +36,7 @@ interface UserDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM users WHERE role = 'ADMIN' LIMIT 1)")
     suspend fun hasAdmin(): Boolean
+
+    @Query("UPDATE users SET password = :password WHERE username = :username")
+    suspend fun updatePassword(username: String, password: String)
 }

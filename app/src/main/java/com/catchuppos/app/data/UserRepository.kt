@@ -41,8 +41,10 @@ class UserRepository(private val userDao: UserDao) {
     }
 
     suspend fun seedDefaultAdmin() {
-        if (!hasAdmin()) {
-            insertUser(
+        val adminExists = hasAdmin()
+        android.util.Log.d("CatchUpDB", "hasAdmin: $adminExists")
+        if (!adminExists) {
+            val id = userDao.insertUser(
                 UserEntity(
                     username = "admin",
                     email = "admin@catchuppos.com",
@@ -51,6 +53,14 @@ class UserRepository(private val userDao: UserDao) {
                     isActive = true
                 )
             )
+            android.util.Log.d("CatchUpDB", "Inserted admin with id: $id")
         }
+        // Always ensure admin password is set to default
+        userDao.updatePassword("admin", "admin123")
+        android.util.Log.d("CatchUpDB", "Admin password reset to default")
+    }
+
+    suspend fun resetAdminPassword() {
+        userDao.updatePassword("admin", "admin123")
     }
 }

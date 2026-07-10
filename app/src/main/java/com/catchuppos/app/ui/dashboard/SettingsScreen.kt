@@ -33,8 +33,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+import android.widget.Toast
+import java.text.SimpleDateFormat
+import java.util.*
+
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(
+    onRestoreComplete: () -> Unit = {}
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val app = context.applicationContext as CatchUpApp
     val userRepository = app.userRepository
@@ -44,6 +50,47 @@ fun SettingsScreen() {
     var showAddUserDialog by remember { mutableStateOf(false) }
     var editingUser by remember { mutableStateOf<UserEntity?>(null) }
     var showDeleteConfirmation by remember { mutableStateOf<UserEntity?>(null) }
+    var showRestoreConfirmation by remember { mutableStateOf(false) }
+    var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+
+    // Backup launcher
+    val backupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val success = withContext(Dispatchers.IO) {
+                    try {
+                        context.contentResolver.openOutputStream(uri)?.use { output ->
+                            com.catchuppos.app.data.BackupHelper.backup(
+                                context, output,
+                                database = app.database.openHelper.writableDatabase
+                            )
+                        }
+                        true
+                    } catch (e: Exception) {
+                        android.util.Log.e("Settings", "Backup failed", e)
+                        false
+                    }
+                }
+                Toast.makeText(
+                    context,
+                    if (success) "Backup created successfully" else "Backup failed",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    // Restore launcher
+    val restoreLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            pendingRestoreUri = uri
+            showRestoreConfirmation = true
+        }
+    }
 
     // Load users
     LaunchedEffect(Unit) {
@@ -194,6 +241,112 @@ fun SettingsScreen() {
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Database Management Section
+        if (AuthState.isAdmin) {
+            Text(
+                text = "DATABASE MANAGEMENT",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted,
+                letterSpacing = 1.5.sp,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D))
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Backup Button
+                    OutlinedButton(
+                        onClick = {
+                            val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+                            val fileName = "catchup_pos_backup_${dateFormat.format(Date())}.zip"
+                            backupLauncher.launch(fileName)
+                        },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color(0xFF1A1A1A),
+                            contentColor = TextWhite
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Backup,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = StatusGreen
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Backup Database & Images",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Save a copy of your data and images",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = TextMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // Restore Button
+                    OutlinedButton(
+                        onClick = {
+                            restoreLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
+                        },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color(0xFF1A1A1A),
+                            contentColor = TextWhite
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Restore,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = OrangeAccent
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Restore Database",
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Load data and images from a backup file",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = TextMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+        }
     }
 
     // Add User Dialog
@@ -277,6 +430,64 @@ fun SettingsScreen() {
             }
         )
     }
+
+    // Restore Confirmation Dialog
+    if (showRestoreConfirmation && pendingRestoreUri != null) {
+        AlertDialog(
+            onDismissRequest = { showRestoreConfirmation = false; pendingRestoreUri = null },
+            containerColor = Color(0xFF1A1A1A),
+            title = {
+                Text("Restore Database", color = TextWhite, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "This will replace all current data and images with the backup. This action cannot be undone. Continue?",
+                    color = TextMuted
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            val success = withContext(Dispatchers.IO) {
+                                try {
+                                    // Close existing connections
+                                    app.closeDatabase()
+                                    // Restore database and images from zip
+                                    context.contentResolver.openInputStream(pendingRestoreUri!!)?.use { input ->
+                                        com.catchuppos.app.data.BackupHelper.restore(context, input)
+                                    } ?: false
+                                } catch (e: Exception) {
+                                    android.util.Log.e("Settings", "Restore failed", e)
+                                    false
+                                }
+                            }
+                            showRestoreConfirmation = false
+                            pendingRestoreUri = null
+                            if (success) {
+                                // Re-seed admin so login works with the restored database
+                                app.userRepository.seedDefaultAdmin()
+                                AuthState.logout()
+                                Toast.makeText(context, "Database restored successfully", Toast.LENGTH_LONG).show()
+                                onRestoreComplete()
+                            } else {
+                                Toast.makeText(context, "Restore failed", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent)
+                ) {
+                    Text("Restore", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreConfirmation = false; pendingRestoreUri = null }) {
+                    Text("Cancel", color = TextMuted)
+                }
+            }
+        )
+    }
+
 }
 
 @Composable
@@ -567,7 +778,7 @@ private fun AddEditUserDialog(
                                     context.contentResolver.openInputStream(profileImageUri!!)?.use { stream ->
                                         android.graphics.BitmapFactory.decodeStream(stream)
                                     }
-                                } catch (e: Exception) { null }
+                                } catch (_: Exception) { null }
                             }
                             if (bitmap != null) {
                                 androidx.compose.foundation.Image(
@@ -686,7 +897,7 @@ private fun saveProfileImageToInternalStorage(context: android.content.Context, 
             }
         }
         file.absolutePath
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         null
     }
 }
