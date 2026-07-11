@@ -216,6 +216,22 @@ fun DashboardScreen(
                         ProductsScreen()
                     }
 
+                    NavItem.REPORTS -> {
+                        ReportsScreen()
+                    }
+
+                    NavItem.PROFIT -> {
+                        ProfitScreen()
+                    }
+
+                    NavItem.EXPENSES -> {
+                        ExpensesScreen()
+                    }
+
+                    NavItem.CUSTOMERS -> {
+                        CustomersScreen()
+                    }
+
                     NavItem.SETTINGS -> {
                         SettingsScreen(
                             onRestoreComplete = {

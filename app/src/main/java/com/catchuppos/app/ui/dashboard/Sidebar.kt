@@ -41,6 +41,8 @@ enum class NavItem(
     PRODUCTS("Products", Icons.Filled.Inventory2, Icons.Outlined.Inventory2),
     TRANSACTIONS("Transactions", Icons.Filled.SwapHoriz, Icons.Outlined.SwapHoriz),
     REPORTS("Reports", Icons.Filled.BarChart, Icons.Outlined.BarChart, adminOnly = true),
+    PROFIT("Profit", Icons.Filled.TrendingUp, Icons.Outlined.TrendingUp, adminOnly = true),
+    EXPENSES("Expenses", Icons.Filled.MoneyOff, Icons.Outlined.MoneyOff, adminOnly = true),
     CUSTOMERS("Customers", Icons.Filled.People, Icons.Outlined.People, adminOnly = true),
     SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings, adminOnly = true)
 }

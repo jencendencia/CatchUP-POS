@@ -7,7 +7,8 @@ class ProductRepository(
     private val categoryDao: CategoryDao,
     private val transactionDao: TransactionDao,
     private val variantDao: ProductVariantDao,
-    private val orderItemDao: OrderItemDao
+    private val orderItemDao: OrderItemDao,
+    private val expenseDao: ExpenseDao
 ) {
 
     val allProducts: Flow<List<ProductEntity>> = productDao.getAllProducts()
@@ -168,4 +169,81 @@ class ProductRepository(
     suspend fun getProductSalesSummary(): List<ProductSalesSummary> = orderItemDao.getProductSalesSummary()
 
     suspend fun getTotalSalesByProduct(productName: String): Double? = orderItemDao.getTotalSalesByProduct(productName)
+
+    // ── Reports ──
+
+    suspend fun getCategorySalesSummary(startTime: Long, endTime: Long): List<CategorySalesSummary> =
+        orderItemDao.getCategorySalesSummary(startTime, endTime)
+
+    suspend fun getTopSellingProducts(startTime: Long, endTime: Long): List<TopSellingProduct> =
+        orderItemDao.getTopSellingProducts(startTime, endTime)
+
+    suspend fun getSalesByPaymentMethod(startTime: Long, endTime: Long): List<PaymentMethodSales> =
+        transactionDao.getSalesByPaymentMethod(startTime, endTime)
+
+    suspend fun getSalesTotalByDateRange(startTime: Long, endTime: Long): Double =
+        transactionDao.getSalesTotalByDateRange(startTime, endTime) ?: 0.0
+
+    suspend fun getOrdersCountByDateRange(startTime: Long, endTime: Long): Int =
+        transactionDao.getOrdersCountByDateRange(startTime, endTime)
+
+    suspend fun getItemsSoldByDateRange(startTime: Long, endTime: Long): Int =
+        transactionDao.getItemsSoldByDateRange(startTime, endTime) ?: 0
+
+    suspend fun getHourlySales(startTime: Long, endTime: Long): List<HourlySalesSummary> =
+        transactionDao.getHourlySales(startTime, endTime)
+
+    suspend fun getTransactionsByDateRange(startTime: Long, endTime: Long): List<TransactionEntity> =
+        transactionDao.getTransactionsByDateRange(startTime, endTime)
+
+    suspend fun getDailySales(startTime: Long, endTime: Long): List<DailySalesSummary> =
+        transactionDao.getDailySales(startTime, endTime)
+
+    suspend fun getDailyItemsSold(startTime: Long, endTime: Long): List<DailyItemsSold> =
+        transactionDao.getDailyItemsSold(startTime, endTime)
+
+    suspend fun getTopCustomers(startTime: Long, endTime: Long, limit: Int = 10): List<CustomerSummary> =
+        transactionDao.getTopCustomers(startTime, endTime, limit)
+
+    suspend fun getCashierPerformance(startTime: Long, endTime: Long): List<CashierSummary> =
+        transactionDao.getCashierPerformance(startTime, endTime)
+
+    suspend fun getOrderStatusCounts(startTime: Long, endTime: Long): List<OrderStatusSummary> =
+        transactionDao.getOrderStatusCounts(startTime, endTime)
+
+    suspend fun getCustomerOrderCount(startTime: Long, endTime: Long, customerName: String): Int =
+        transactionDao.getCustomerOrderCount(startTime, endTime, customerName)
+
+    // ── Reports: aggregated helpers ──
+
+    suspend fun getCustomerCount(startTime: Long, endTime: Long): Int {
+        return transactionDao.getTransactionsByDateRange(startTime, endTime)
+            .map { it.customerName }
+            .distinct()
+            .size
+    }
+
+    // ── Expenses ──
+
+    suspend fun getExpensesByDateRange(startTime: Long, endTime: Long): List<ExpenseEntity> =
+        expenseDao.getExpensesByDateRange(startTime, endTime)
+
+    suspend fun getTotalExpensesByDateRange(startTime: Long, endTime: Long): Double =
+        expenseDao.getTotalExpensesByDateRange(startTime, endTime) ?: 0.0
+
+    suspend fun getExpenseCategoryTotals(startTime: Long, endTime: Long): ExpenseCategoryTotals? =
+        expenseDao.getExpenseCategoryTotals(startTime, endTime)
+
+    suspend fun getExpensesByDateRangeAsc(startTime: Long, endTime: Long): List<ExpenseEntity> =
+        expenseDao.getExpensesByDateRangeAsc(startTime, endTime)
+
+    suspend fun getExpenseCountByDateRange(startTime: Long, endTime: Long): Int =
+        expenseDao.getExpenseCountByDateRange(startTime, endTime)
+
+    suspend fun insertExpense(expense: ExpenseEntity): Long =
+        expenseDao.insertExpense(expense)
+
+    suspend fun deleteExpenseById(id: Int) =
+        expenseDao.deleteExpenseById(id)
 }
+

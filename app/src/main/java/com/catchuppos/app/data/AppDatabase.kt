@@ -8,8 +8,8 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [ProductEntity::class, CategoryEntity::class, TransactionEntity::class, ProductVariantEntity::class, UserEntity::class, OrderItemEntity::class],
-    version = 9,
+    entities = [ProductEntity::class, CategoryEntity::class, TransactionEntity::class, ProductVariantEntity::class, UserEntity::class, OrderItemEntity::class, ExpenseEntity::class],
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -20,6 +20,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun productVariantDao(): ProductVariantDao
     abstract fun userDao(): UserDao
     abstract fun orderItemDao(): OrderItemDao
+    abstract fun expenseDao(): ExpenseDao
 
     companion object {
         @Volatile
@@ -76,7 +77,27 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        private val ALL_MIGRATIONS = arrayOf(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+        // Migration 9 → 10: Add expenses table
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS expenses (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        date INTEGER NOT NULL DEFAULT 0,
+                        syrups REAL NOT NULL DEFAULT 0.0,
+                        sauce REAL NOT NULL DEFAULT 0.0,
+                        milk REAL NOT NULL DEFAULT 0.0,
+                        ice REAL NOT NULL DEFAULT 0.0,
+                        others REAL NOT NULL DEFAULT 0.0,
+                        vendor TEXT NOT NULL DEFAULT '',
+                        description TEXT NOT NULL DEFAULT '',
+                        created_at INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+            }
+        }
+
+        private val ALL_MIGRATIONS = arrayOf(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {

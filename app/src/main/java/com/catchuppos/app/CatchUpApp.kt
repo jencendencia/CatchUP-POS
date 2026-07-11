@@ -17,7 +17,7 @@ class CatchUpApp : Application() {
         get() = AppDatabase.getInstance(this)
     // Also not lazy so that after close+restore, we get fresh DAOs from the new database instance
     val productRepository: ProductRepository
-        get() = ProductRepository(database.productDao(), database.categoryDao(), database.transactionDao(), database.productVariantDao(), database.orderItemDao())
+        get() = ProductRepository(database.productDao(), database.categoryDao(), database.transactionDao(), database.productVariantDao(), database.orderItemDao(), database.expenseDao())
     val userRepository: UserRepository
         get() = UserRepository(database.userDao())
 

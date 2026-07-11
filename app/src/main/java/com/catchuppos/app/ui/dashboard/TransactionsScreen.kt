@@ -41,6 +41,10 @@ fun TransactionsScreen() {
     var selectedDateRange by remember { mutableStateOf("Today") }
     var selectedType by remember { mutableStateOf("All Types") }
     var selectedStatus by remember { mutableStateOf("All Status") }
+    var selectedDateLabel by remember { mutableStateOf("Today") }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var customStartDate by remember { mutableStateOf(0L) }
+    var customEndDate by remember { mutableStateOf(0L) }
     var currentPage by remember { mutableIntStateOf(1) }
     var allTransactions by remember { mutableStateOf<List<TransactionEntity>>(emptyList()) }
     var selectedTransaction by remember { mutableStateOf<TransactionEntity?>(null) }
@@ -52,7 +56,7 @@ fun TransactionsScreen() {
     }
 
     // Filter logic
-    val filteredTransactions = remember(allTransactions, selectedType, selectedStatus, selectedDateRange) {
+    val filteredTransactions = remember(allTransactions, selectedType, selectedStatus, selectedDateRange, customStartDate, customEndDate) {
         val now = System.currentTimeMillis()
         val startOfDay = getStartOfDay(now)
 
@@ -62,6 +66,7 @@ fun TransactionsScreen() {
                 "Today" -> txn.createdAt >= startOfDay
                 "This Week" -> txn.createdAt >= startOfDay - 7 * 86400000L
                 "This Month" -> txn.createdAt >= startOfDay - 30 * 86400000L
+                "Custom Range" -> txn.createdAt >= customStartDate && txn.createdAt <= customEndDate
                 else -> true
             }
             // Type filter
@@ -111,13 +116,19 @@ fun TransactionsScreen() {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FilterDropdown(
-                label = selectedDateRange,
-                icon = Icons.Default.DateRange,
-                options = listOf("Today", "This Week", "This Month", "All Time"),
-                onSelected = { selectedDateRange = it; currentPage = 1 },
-                modifier = Modifier.weight(1.2f)
-            )
+            OutlinedButton(
+                onClick = { showDatePicker = true },
+                modifier = Modifier.weight(1.2f).height(44.dp),
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, DarkBorder),
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = DarkCard, contentColor = TextWhite),
+                contentPadding = PaddingValues(horizontal = 14.dp)
+            ) {
+                Icon(Icons.Default.DateRange, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(selectedDateLabel, style = MaterialTheme.typography.bodySmall, color = TextWhite, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp))
+            }
 
             FilterDropdown(
                 label = selectedType,
@@ -309,6 +320,35 @@ fun TransactionsScreen() {
                 }
             }
         }
+    }
+
+    // Date Range Picker Dialog (calendar-based)
+    if (showDatePicker) {
+        DateRangePickerDialog(
+            onDismiss = { showDatePicker = false },
+            onApply = { startMillis, endMillis ->
+                if (startMillis != null && endMillis != null) {
+                    val cal = Calendar.getInstance()
+                    cal.timeInMillis = startMillis
+                    cal.set(Calendar.HOUR_OF_DAY, 0)
+                    cal.set(Calendar.MINUTE, 0)
+                    cal.set(Calendar.SECOND, 0)
+                    cal.set(Calendar.MILLISECOND, 0)
+                    val startDay = cal.timeInMillis
+                    cal.timeInMillis = endMillis
+                    cal.set(Calendar.HOUR_OF_DAY, 23)
+                    cal.set(Calendar.MINUTE, 59)
+                    cal.set(Calendar.SECOND, 59)
+                    cal.set(Calendar.MILLISECOND, 999)
+                    val endDay = cal.timeInMillis
+                    customStartDate = startDay
+                    customEndDate = endDay
+                    selectedDateRange = "Custom Range"
+                    selectedDateLabel = "${SimpleDateFormat("MMMM dd, yyyy", Locale.US).format(Date(startDay))} - ${SimpleDateFormat("MMMM dd, yyyy", Locale.US).format(Date(endDay))}"
+                }
+                showDatePicker = false
+            }
+        )
     }
 
     // Transaction Detail Dialog
@@ -901,4 +941,65 @@ private fun PaginationButton(
             )
         }
     }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Date Range Picker Dialog (Calendar-based)
+// ════════════════════════════════════════════════════════════════════
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DateRangePickerDialog(
+    onDismiss: () -> Unit,
+    onApply: (startMillis: Long?, endMillis: Long?) -> Unit
+) {
+    val dateRangePickerState = rememberDateRangePickerState()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DarkCard,
+        title = { Text("Select Date Range", color = TextWhite, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(modifier = Modifier.height(380.dp)) {
+                DateRangePicker(
+                    state = dateRangePickerState,
+                    modifier = Modifier.weight(1f),
+                    showModeToggle = false,
+                    colors = DatePickerDefaults.colors(
+                        containerColor = DarkCard,
+                        titleContentColor = TextWhite,
+                        headlineContentColor = TextWhite,
+                        weekdayContentColor = TextMuted,
+                        subheadContentColor = TextWhite,
+                        yearContentColor = TextWhite,
+                        currentYearContentColor = OrangeAccent,
+                        selectedDayContentColor = Color.White,
+                        selectedDayContainerColor = OrangeAccent,
+                        dayContentColor = TextWhite,
+                        todayContentColor = OrangeAccent,
+                        todayDateBorderColor = OrangeAccent,
+                        dayInSelectionRangeContentColor = Color.White,
+                        dayInSelectionRangeContainerColor = OrangeAccent.copy(alpha = 0.3f),
+                        dividerColor = DarkBorder
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onApply(
+                        dateRangePickerState.selectedStartDateMillis,
+                        dateRangePickerState.selectedEndDateMillis
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = OrangeAccent),
+                enabled = dateRangePickerState.selectedStartDateMillis != null &&
+                          dateRangePickerState.selectedEndDateMillis != null
+            ) { Text("Apply", fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = TextMuted) }
+        }
+    )
 }

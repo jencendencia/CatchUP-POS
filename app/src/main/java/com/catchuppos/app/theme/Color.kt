@@ -3,10 +3,11 @@ package com.catchuppos.app.theme
 import androidx.compose.ui.graphics.Color
 
 // Backgrounds
-val DarkBackground = Color(0xFF0D0D0D)
+val DarkBackground = Color(0xFF000000)
 val DarkSurface = Color(0xFF121212)
 val DarkCard = Color(0xFF1A1A1A)
 val DarkBorder = Color(0xFF2A2A2A)
+val SubtleWhite = Color(0xFF404040)
 
 // Primary Accent
 val OrangeAccent = Color(0xFFFF6600)
