@@ -159,7 +159,7 @@ fun OrdersScreen(
     // Load drink products, categories, and held orders from DB
     LaunchedEffect(Unit) {
         val allProducts = repository.allProductsOnce()
-        drinkProducts = allProducts.filter { it.type == "DRINK" }
+        drinkProducts = allProducts.filter { it.type == "DRINK" && it.isActive }
         dbCategories = repository.allCategoriesOnce()
         heldOrders = loadHeldOrders(context, allProducts)
         cupsAvailable = loadCupCount(context)
@@ -1384,10 +1384,10 @@ private fun ItemCustomizationSheet(
     var productVariants by remember { mutableStateOf<List<com.catchuppos.app.data.ProductVariantEntity>>(emptyList()) }
 
     LaunchedEffect(product.id) {
-        productVariants = repository.getVariantsByProductIdOnce(product.id)
+        productVariants = repository.getVariantsByProductIdOnce(product.id).filter { it.isActive }
     }
 
-    val sizes = if (productVariants.isNotEmpty()) productVariants.map { it.sizeName } else listOf("12oz", "16oz", "22oz")
+    val sizes = if (productVariants.isNotEmpty()) productVariants.map { it.sizeName } else emptyList()
     var selectedSize by remember { mutableStateOf("") }
     var selectedVariant by remember { mutableStateOf<ProductVariantEntity?>(null) }
 

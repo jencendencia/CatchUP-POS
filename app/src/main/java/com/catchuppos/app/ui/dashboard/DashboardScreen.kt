@@ -110,22 +110,22 @@ fun DashboardScreen(
         }
     }
 
-    // Load real data from repository
+    // Load real data from repository (today-specific data)
     LaunchedEffect(Unit) {
-        totalOrders = repository.getTransactionCount()
+        totalOrders = repository.getTodayOrdersCount()
         todaySales = repository.getTodaySales()
         totalDrinksAvailable = repository.getProductCount()
-        drinksSold = repository.getTotalItemsSold()
+        drinksSold = repository.getTodayItemsSold()
         cupsAvailable = loadCupCount(context)
     }
 
     // Refresh data when returning to dashboard
     LaunchedEffect(activeNavItem) {
         if (activeNavItem == NavItem.DASHBOARD) {
-            totalOrders = repository.getTransactionCount()
+            totalOrders = repository.getTodayOrdersCount()
             todaySales = repository.getTodaySales()
             totalDrinksAvailable = repository.getProductCount()
-            drinksSold = repository.getTotalItemsSold()
+            drinksSold = repository.getTodayItemsSold()
             cupsAvailable = loadCupCount(context)
         }
     }

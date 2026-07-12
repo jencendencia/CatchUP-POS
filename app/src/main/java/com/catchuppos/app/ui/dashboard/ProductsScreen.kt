@@ -50,11 +50,13 @@ import kotlinx.coroutines.withContext
 // --- Data Models ---
 
 data class ProductVariantUI(
+    val id: Int = 0,
     val sizeName: String,
     val sellingPrice: Double,
     val costPrice: Double? = null,
     val isDefault: Boolean = false,
-    val sortOrder: Int = 0
+    val sortOrder: Int = 0,
+    val isActive: Boolean = true
 )
 
 enum class ProductCategory(val displayName: String) {
@@ -119,6 +121,7 @@ fun ProductsScreen(
     var showAddForm by remember { mutableStateOf(false) }
     var editingProduct by remember { mutableStateOf<ProductEntity?>(null) }
     var selectedCategory by remember { mutableStateOf(ProductCategory.ALL) }
+    var selectedCategoryDetail by remember { mutableStateOf<ProductCategory?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var currentPage by remember { mutableStateOf(0) }
     var dbProducts by remember { mutableStateOf<List<Product>>(emptyList()) }
@@ -128,7 +131,7 @@ fun ProductsScreen(
         val entities = repository.allProductsOnce()
         dbProducts = entities.map { entity ->
             val variants = repository.getVariantsByProductIdOnce(entity.id).map {
-                ProductVariantUI(it.sizeName, it.sellingPrice, it.costPrice, it.isDefault, it.sortOrder)
+                ProductVariantUI(it.id, it.sizeName, it.sellingPrice, it.costPrice, it.isDefault, it.sortOrder, it.isActive)
             }
             entity.toUiProduct().copy(variants = variants)
         }
@@ -202,6 +205,52 @@ fun ProductsScreen(
                 }
             }
         )
+    } else if (selectedCategoryDetail != null) {
+        val detailCategory = selectedCategoryDetail!!
+        CategoryProductsTable(
+            category = detailCategory,
+            products = dbProducts.filter { it.category == detailCategory },
+            onBack = {
+                selectedCategoryDetail = null
+                selectedCategory = ProductCategory.ALL
+                currentPage = 0
+            },
+            onAddProduct = {
+                showAddForm = true
+            },
+            onEditProduct = { product ->
+                scope.launch {
+                    val entity = repository.getProductById(product.id)
+                    if (entity != null) {
+                        editingProduct = entity
+                    }
+                }
+            },
+            onDeleteProduct = { product ->
+                scope.launch {
+                    repository.deleteProductById(product.id)
+                    refreshProducts()
+                }
+            },
+            onToggleVariantActive = { productId, variantId, newIsActive ->
+                scope.launch {
+                    if (variantId != null) {
+                        val currentVariants = repository.getVariantsByProductIdOnce(productId)
+                        val variant = currentVariants.find { it.id == variantId }
+                        if (variant != null) {
+                            repository.updateVariant(variant.copy(isActive = newIsActive))
+                            refreshProducts()
+                        }
+                    } else {
+                        val entity = repository.getProductById(productId)
+                        if (entity != null) {
+                            repository.updateProduct(entity.copy(isActive = newIsActive))
+                            refreshProducts()
+                        }
+                    }
+                }
+            }
+        )
     } else {
         val filteredProducts = remember(selectedCategory, searchQuery, dbProducts) {
             dbProducts.filter { product ->
@@ -227,7 +276,12 @@ fun ProductsScreen(
             ProductsTopBar(
                 selectedCategory = selectedCategory,
                 onCategorySelected = {
-                    selectedCategory = it
+                    if (it == ProductCategory.ALL) {
+                        selectedCategory = it
+                        selectedCategoryDetail = null
+                    } else {
+                        selectedCategoryDetail = it
+                    }
                     currentPage = 0
                 },
                 searchQuery = searchQuery,
@@ -718,6 +772,563 @@ private fun generateVisiblePages(currentPage: Int, totalPages: Int): List<Int> {
         0 -> listOf(0, 1, 2)
         totalPages - 1 -> listOf(totalPages - 3, totalPages - 2, totalPages - 1)
         else -> listOf(currentPage - 1, currentPage, currentPage + 1)
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Category Inventory Table View
+// ════════════════════════════════════════════════════════════════════
+
+private val categoryDisplayMap = mapOf(
+    ProductCategory.COFFEE to Triple(Color(0xFF6D4C41), "☕", "Manage all coffee products"),
+    ProductCategory.NON_COFFEE to Triple(Color(0xFFF48FB1), "🧋", "Manage all non coffee products"),
+    ProductCategory.FOOD to Triple(Color(0xFFFF6600), "🛎️", "Manage all food products")
+)
+
+private fun getCategoryDisplayName(category: ProductCategory): String = category.displayName.lowercase()
+
+// ── Flattened variant row for the table ──
+
+private data class VariantTableRow(
+    val productId: Int,
+    val productTitle: String,
+    val productDescription: String?,
+    val productImagePath: String?,
+    val productIsActive: Boolean,
+    val variantId: Int?,
+    val sizeName: String,
+    val sellingPrice: Double,
+    val isActive: Boolean
+)
+
+private fun flattenToVariantRows(products: List<Product>): List<VariantTableRow> {
+    return products.flatMap { product ->
+        if (product.variants.isNotEmpty()) {
+            product.variants.map { variant ->
+                VariantTableRow(
+                    productId = product.id,
+                    productTitle = product.title,
+                    productDescription = product.description,
+                    productImagePath = product.imagePath,
+                    productIsActive = product.isActive,
+                    variantId = variant.id,
+                    sizeName = variant.sizeName,
+                    sellingPrice = variant.sellingPrice,
+                    isActive = variant.isActive
+                )
+            }
+        } else {
+            listOf(
+                VariantTableRow(
+                    productId = product.id,
+                    productTitle = product.title,
+                    productDescription = product.description,
+                    productImagePath = product.imagePath,
+                    productIsActive = product.isActive,
+                    variantId = null,
+                    sizeName = "—",
+                    sellingPrice = product.price,
+                    isActive = product.isActive
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun CategoryProductsTable(
+    category: ProductCategory,
+    products: List<Product>,
+    onBack: () -> Unit,
+    onAddProduct: () -> Unit,
+    onEditProduct: (Product) -> Unit,
+    onDeleteProduct: (Product) -> Unit,
+    onToggleVariantActive: (productId: Int, variantId: Int?, newIsActive: Boolean) -> Unit
+) {
+    val (iconColor, iconChar, subtitle) = categoryDisplayMap[category] ?: Triple(Color.Gray, "❓", "")
+
+    var searchQuery by remember { mutableStateOf("") }
+    var currentPage by remember { mutableIntStateOf(0) }
+    val pageSize = 5
+    var showDeleteConfirm by remember { mutableStateOf<VariantTableRow?>(null) }
+
+    val allRows = remember(products) { flattenToVariantRows(products) }
+
+    val filteredRows = remember(searchQuery, allRows) {
+        if (searchQuery.isBlank()) allRows
+        else allRows.filter {
+            it.productTitle.contains(searchQuery, ignoreCase = true) ||
+            it.productDescription?.contains(searchQuery, ignoreCase = true) == true
+        }
+    }
+
+    val totalPages = (filteredRows.size + pageSize - 1) / pageSize
+    val pagedRows = filteredRows
+        .drop(currentPage * pageSize)
+        .take(pageSize)
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(DarkBackground)
+    ) {
+        // ── Navigation Context Bar: Back Link ──
+        TextButton(
+            onClick = onBack,
+            modifier = Modifier.padding(start = 20.dp, top = 12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.ArrowBack,
+                contentDescription = null,
+                tint = OrangeAccent,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "Back to Products",
+                color = OrangeAccent,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium
+            )
+        }
+
+        // ── Global Utilities & Header Toolbar ──
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 28.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Dynamic Category Label Group
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Icon Badge
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(iconColor.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = iconChar, fontSize = 22.sp)
+                }
+
+                // Text Stack
+                Column {
+                    Text(
+                        text = "Category: ${category.displayName}",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = TextWhite,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextMuted
+                    )
+                }
+            }
+
+            // Search & Action Control Stack
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Contextual Search Bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = {
+                        searchQuery = it
+                        currentPage = 0
+                    },
+                    placeholder = {
+                        Text(
+                            text = "Search ${getCategoryDisplayName(category)} products...",
+                            color = InputPlaceholder
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = TextMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    },
+                    singleLine = true,
+                    modifier = Modifier.widthIn(max = 300.dp).height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = OrangeAccent,
+                        unfocusedBorderColor = InputBorder,
+                        cursorColor = OrangeAccent,
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite
+                    ),
+                    textStyle = MaterialTheme.typography.bodyMedium
+                )
+
+                // Add Product Button
+                if (AuthState.isAdmin) {
+                    Button(
+                        onClick = onAddProduct,
+                        modifier = Modifier.height(52.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = OrangeAccent,
+                            contentColor = TextWhite
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Add Product",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── Itemized Inventory Grid Ledger Table ──
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 28.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (filteredRows.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (searchQuery.isBlank()) "No ${getCategoryDisplayName(category)} products yet."
+                                   else "No products found matching \"$searchQuery\".",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = TextMuted
+                        )
+                    }
+                } else {
+                    // Table Header
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF1A1A1A))
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("PRODUCT NAME", style = MaterialTheme.typography.labelSmall, color = TextGray, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.5f))
+                        Text("PRICE (₱)", style = MaterialTheme.typography.labelSmall, color = TextGray, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Text("SIZE / VARIANT", style = MaterialTheme.typography.labelSmall, color = TextGray, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.5f))
+                        Text("STATUS", style = MaterialTheme.typography.labelSmall, color = TextGray, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                        if (AuthState.isAdmin) {
+                            Text("ACTIONS", style = MaterialTheme.typography.labelSmall, color = TextGray, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2f).padding(start = 8.dp))
+                        }
+                    }
+
+                    HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
+
+                    // Table Body — scrollable, each row = one variant
+                    Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                        pagedRows.forEachIndexed { index, row ->
+                            val bgColor = if (index % 2 == 0) Color(0xFF0D0D0D) else Color(0xFF111111)
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(bgColor)
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // PRODUCT NAME: thumbnail + name + description
+                                Row(
+                                    modifier = Modifier.weight(2.5f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    // Image thumbnail
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(DarkCard),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (row.productImagePath != null) {
+                                            val bitmap = remember(row.productImagePath) {
+                                                android.graphics.BitmapFactory.decodeFile(row.productImagePath)
+                                            }
+                                            if (bitmap != null) {
+                                                androidx.compose.foundation.Image(
+                                                    bitmap = bitmap.asImageBitmap(),
+                                                    contentDescription = row.productTitle,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = ContentScale.Crop
+                                                )
+                                            } else {
+                                                Text(text = row.productTitle.take(2).uppercase(), color = OrangeAccent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                            }
+                                        } else {
+                                            Text(text = row.productTitle.take(2).uppercase(), color = OrangeAccent, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                        }
+                                    }
+
+                                    // Name + Description
+                                    Column {
+                                        Text(
+                                            text = row.productTitle,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = TextWhite,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        if (row.productDescription != null) {
+                                            Text(
+                                                text = row.productDescription,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = TextGray,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // PRICE (variant-specific)
+                                Text(
+                                    text = "₱${String.format("%.2f", row.sellingPrice)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = OrangeAccent,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                // SIZE / VARIANT (single variant name)
+                                Text(
+                                    text = row.sizeName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextMuted,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1.5f)
+                                )
+
+                                // STATUS toggle (per-variant)
+                                Row(
+                                    modifier = Modifier.weight(1f).padding(start = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = if (row.isActive) StatusGreenSoft else Color.Transparent
+                                    ) {
+                                        Text(
+                                            text = if (row.isActive) "Active" else "Inactive",
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (row.isActive) StatusGreen else TextGray,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    if (AuthState.isAdmin) {
+                                        Switch(
+                                            checked = row.isActive,
+                                            onCheckedChange = {
+                                                onToggleVariantActive(row.productId, row.variantId, !row.isActive)
+                                            },
+                                            modifier = Modifier.height(24.dp),
+                                            colors = SwitchDefaults.colors(
+                                                checkedThumbColor = TextWhite,
+                                                checkedTrackColor = OrangeAccent,
+                                                uncheckedThumbColor = TextGray,
+                                                uncheckedTrackColor = DarkBorder
+                                            )
+                                        )
+                                    }
+                                }
+
+                                // ACTIONS (product-level: find the original product for edit/delete)
+                                if (AuthState.isAdmin) {
+                                    Row(
+                                        modifier = Modifier.weight(2f).padding(start = 8.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Look up the original product from variants/state
+                                        val origProduct = products.find { it.id == row.productId }
+
+                                        // Edit button
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(OrangeAccent.copy(alpha = 0.12f))
+                                                .clickable { if (origProduct != null) onEditProduct(origProduct) },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = "Edit",
+                                                tint = OrangeAccent,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+
+                                        // Delete button
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(MutedRed.copy(alpha = 0.12f))
+                                                .clickable { if (origProduct != null) showDeleteConfirm = row },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Delete",
+                                                tint = MutedRed,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            HorizontalDivider(color = DarkBorder.copy(alpha = 0.3f), thickness = 0.5.dp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Table Pagination Footer ──
+        if (filteredRows.isNotEmpty()) {
+            val startIndex = currentPage * pageSize + 1
+            val endIndex = minOf((currentPage + 1) * pageSize, filteredRows.size)
+
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 28.dp, vertical = 12.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF0D0D0D)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    // Index Scope Readout
+                    Text(
+                        text = "Showing $startIndex to $endIndex of ${filteredRows.size} ${getCategoryDisplayName(category)} items",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted
+                    )
+
+                    // Navigation Controllers
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { if (currentPage > 0) currentPage-- },
+                            enabled = currentPage > 0,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ChevronLeft,
+                                contentDescription = "Previous",
+                                tint = if (currentPage > 0) TextWhite else TextGray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        val visiblePages = generateVisiblePages(currentPage, totalPages)
+                        visiblePages.forEach { page ->
+                            val isCurrent = page == currentPage
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(if (isCurrent) OrangeAccent else Color.Transparent)
+                                    .clickable { currentPage = page },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "${page + 1}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (isCurrent) TextWhite else TextMuted,
+                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = { if (currentPage < totalPages - 1) currentPage++ },
+                            enabled = currentPage < totalPages - 1,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = "Next",
+                                tint = if (currentPage < totalPages - 1) TextWhite else TextGray,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Delete Confirmation Dialog ──
+    if (showDeleteConfirm != null) {
+        val rowToDelete = showDeleteConfirm!!
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = null },
+            title = {
+                Text("Delete Product", color = TextWhite, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "Are you sure you want to delete \"${rowToDelete.productTitle}\"? This action cannot be undone.",
+                    color = TextMuted
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val origProduct = products.find { it.id == rowToDelete.productId }
+                        if (origProduct != null) onDeleteProduct(origProduct)
+                        showDeleteConfirm = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MutedRed)
+                ) {
+                    Text("Delete", color = TextWhite)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = null }) {
+                    Text("Cancel", color = TextMuted)
+                }
+            },
+            containerColor = Color(0xFF1A1A1A)
+        )
     }
 }
 
@@ -1550,7 +2161,7 @@ private fun AddProductScreen(
     LaunchedEffect(editingProduct) {
         if (editingProduct != null) {
             variants = addProductRepository.getVariantsByProductIdOnce(editingProduct!!.id).map {
-                ProductVariantUI(it.sizeName, it.sellingPrice, it.costPrice, it.isDefault, it.sortOrder)
+                ProductVariantUI(it.id, it.sizeName, it.sellingPrice, it.costPrice, it.isDefault, it.sortOrder, it.isActive)
             }
         }
     }

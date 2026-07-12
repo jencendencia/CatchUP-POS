@@ -59,6 +59,9 @@ class ProductRepository(
     suspend fun deleteVariantsByProductId(productId: Int) =
         variantDao.deleteVariantsByProductId(productId)
 
+    suspend fun updateVariant(variant: ProductVariantEntity) =
+        variantDao.updateVariant(variant)
+
     // ── Seeding ──
 
     suspend fun seedSampleData() {
@@ -139,6 +142,18 @@ class ProductRepository(
     suspend fun getTodaySales(): Double {
         val startOfDay = getStartOfDay()
         return transactionDao.getTodaySales(startOfDay) ?: 0.0
+    }
+
+    suspend fun getTodayOrdersCount(): Int {
+        val startOfDay = getStartOfDay()
+        val endOfDay = startOfDay + 86_400_000 // 24 hours in millis
+        return transactionDao.getOrdersCountByDateRange(startOfDay, endOfDay)
+    }
+
+    suspend fun getTodayItemsSold(): Int {
+        val startOfDay = getStartOfDay()
+        val endOfDay = startOfDay + 86_400_000 // 24 hours in millis
+        return transactionDao.getItemsSoldByDateRange(startOfDay, endOfDay) ?: 0
     }
 
     suspend fun getTodayCustomersServed(): Int {
