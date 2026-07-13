@@ -91,26 +91,74 @@ fun SmallMetricCard(label: String, value: String, valueColor: Color, modifier: M
 @Composable
 fun DailySalesBarChart(dailySales: List<DailySalesSummary>, modifier: Modifier = Modifier) {
     val maxVal = maxOf(dailySales.maxOfOrNull { it.total } ?: 1.0, 1.0)
-    val barColor = OrangeAccent
+    val lineColor = OrangeAccent
     val gridColor = DarkBorder
+    val textColor = TextGray
 
-    Canvas(modifier = modifier.padding(start = 8.dp, bottom = 24.dp, end = 8.dp, top = 8.dp)) {
+    val yAxisPaint = remember { android.graphics.Paint().apply { textSize = 18f; textAlign = android.graphics.Paint.Align.RIGHT } }
+    val xAxisPaint = remember { android.graphics.Paint().apply { textSize = 16f; textAlign = android.graphics.Paint.Align.CENTER } }
+
+    Canvas(modifier = modifier.padding(start = 48.dp, bottom = 28.dp, end = 8.dp, top = 8.dp)) {
         if (dailySales.isEmpty()) return@Canvas
-        val barW = (size.width / dailySales.size) * 0.6f
-        val gap = (size.width / dailySales.size) * 0.4f
+        val chartWidth = size.width
+        val chartHeight = size.height
+        val baseline = chartHeight
 
+        // Draw Y-axis grid lines and labels
+        val gridSteps = 4
+        for (i in 0..gridSteps) {
+            val y = baseline - (chartHeight * i / gridSteps)
+            drawLine(gridColor, Offset(0f, y), Offset(chartWidth, y), strokeWidth = 0.5f)
+            val labelValue = (maxVal * i / gridSteps)
+            yAxisPaint.color = textColor.hashCode()
+            drawContext.canvas.nativeCanvas.drawText(
+                "₱${String.format(Locale.US, "%,.0f", labelValue)}", -8f, y + 5f, yAxisPaint
+            )
+        }
+
+        // Calculate points
+        val stepX = if (dailySales.size > 1) chartWidth / (dailySales.size - 1) else chartWidth / 2f
+        val points = dailySales.mapIndexed { i, day ->
+            val x = i * stepX
+            val y = baseline - (chartHeight * (day.total / maxVal)).toFloat()
+            Offset(x, y)
+        }
+
+        // Draw filled area under the line
+        if (points.size >= 2) {
+            val fillPath = Path().apply {
+                moveTo(points.first().x, baseline)
+                points.forEach { lineTo(it.x, it.y) }
+                lineTo(points.last().x, baseline)
+                close()
+            }
+            drawPath(fillPath, lineColor.copy(alpha = 0.1f))
+        }
+
+        // Draw the line
+        if (points.size >= 2) {
+            val linePath = Path().apply {
+                moveTo(points.first().x, points.first().y)
+                for (i in 1 until points.size) lineTo(points[i].x, points[i].y)
+            }
+            drawPath(linePath, lineColor, style = Stroke(width = 2.5f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
+
+        // Draw dots
+        points.forEach { pt ->
+            drawCircle(lineColor, radius = 4f, center = pt)
+            drawCircle(Color(0xFF0D0D0D), radius = 2f, center = pt)
+        }
+
+        // Draw X-axis labels
         dailySales.forEachIndexed { i, day ->
-            val barH = (size.height * (day.total / maxVal)).toFloat()
-            val x = i * (barW + gap) + gap / 2
-            val y = size.height - barH
-            drawRect(barColor, Offset(x, y), Size(barW, barH))
-            // Label
+            val x = i * stepX
             val label = if (day.dayOffset > 0) {
                 SimpleDateFormat("MM/dd", Locale.US).format(Date(day.dayOffset * 86400000L))
             } else ""
+            xAxisPaint.color = textColor.hashCode()
             drawContext.canvas.nativeCanvas.drawText(
-                label, x + barW / 2, size.height + 14f,
-                android.graphics.Paint().apply { color = TextGray.hashCode(); textSize = 16f; textAlign = android.graphics.Paint.Align.CENTER }
+                label, x, baseline + 18f, xAxisPaint
             )
         }
     }
@@ -123,25 +171,74 @@ fun DailySalesBarChart(dailySales: List<DailySalesSummary>, modifier: Modifier =
 @Composable
 fun DailyOrdersBarChart(dailySales: List<DailySalesSummary>, modifier: Modifier = Modifier) {
     val maxVal = maxOf(dailySales.maxOfOrNull { it.orderCount } ?: 1, 1)
-    val barColor = Color(0xFF2196F3)
+    val lineColor = Color(0xFF2196F3)
     val gridColor = DarkBorder
+    val textColor = TextGray
 
-    Canvas(modifier = modifier.padding(start = 8.dp, bottom = 24.dp, end = 8.dp, top = 8.dp)) {
+    val yAxisPaint = remember { android.graphics.Paint().apply { textSize = 18f; textAlign = android.graphics.Paint.Align.RIGHT } }
+    val xAxisPaint = remember { android.graphics.Paint().apply { textSize = 16f; textAlign = android.graphics.Paint.Align.CENTER } }
+
+    Canvas(modifier = modifier.padding(start = 48.dp, bottom = 28.dp, end = 8.dp, top = 8.dp)) {
         if (dailySales.isEmpty()) return@Canvas
-        val barW = (size.width / dailySales.size) * 0.6f
-        val gap = (size.width / dailySales.size) * 0.4f
+        val chartWidth = size.width
+        val chartHeight = size.height
+        val baseline = chartHeight
 
+        // Draw Y-axis grid lines and labels
+        val gridSteps = 4
+        for (i in 0..gridSteps) {
+            val y = baseline - (chartHeight * i / gridSteps)
+            drawLine(gridColor, Offset(0f, y), Offset(chartWidth, y), strokeWidth = 0.5f)
+            val labelValue = (maxVal.toFloat() * i / gridSteps).toInt()
+            yAxisPaint.color = textColor.hashCode()
+            drawContext.canvas.nativeCanvas.drawText(
+                "$labelValue", -8f, y + 5f, yAxisPaint
+            )
+        }
+
+        // Calculate points
+        val stepX = if (dailySales.size > 1) chartWidth / (dailySales.size - 1) else chartWidth / 2f
+        val points = dailySales.mapIndexed { i, day ->
+            val x = i * stepX
+            val y = baseline - (chartHeight * (day.orderCount.toFloat() / maxVal)).toFloat()
+            Offset(x, y)
+        }
+
+        // Draw filled area under the line
+        if (points.size >= 2) {
+            val fillPath = Path().apply {
+                moveTo(points.first().x, baseline)
+                points.forEach { lineTo(it.x, it.y) }
+                lineTo(points.last().x, baseline)
+                close()
+            }
+            drawPath(fillPath, lineColor.copy(alpha = 0.1f))
+        }
+
+        // Draw the line
+        if (points.size >= 2) {
+            val linePath = Path().apply {
+                moveTo(points.first().x, points.first().y)
+                for (i in 1 until points.size) lineTo(points[i].x, points[i].y)
+            }
+            drawPath(linePath, lineColor, style = Stroke(width = 2.5f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
+
+        // Draw dots
+        points.forEach { pt ->
+            drawCircle(lineColor, radius = 4f, center = pt)
+            drawCircle(Color(0xFF0D0D0D), radius = 2f, center = pt)
+        }
+
+        // Draw X-axis labels
         dailySales.forEachIndexed { i, day ->
-            val barH = (size.height * (day.orderCount.toFloat() / maxVal)).toFloat()
-            val x = i * (barW + gap) + gap / 2
-            val y = size.height - barH
-            drawRect(barColor, Offset(x, y), Size(barW, barH))
+            val x = i * stepX
             val label = if (day.dayOffset > 0) {
                 SimpleDateFormat("MM/dd", Locale.US).format(Date(day.dayOffset * 86400000L))
             } else ""
+            xAxisPaint.color = textColor.hashCode()
             drawContext.canvas.nativeCanvas.drawText(
-                label, x + barW / 2, size.height + 14f,
-                android.graphics.Paint().apply { color = TextGray.hashCode(); textSize = 16f; textAlign = android.graphics.Paint.Align.CENTER }
+                label, x, baseline + 18f, xAxisPaint
             )
         }
     }
