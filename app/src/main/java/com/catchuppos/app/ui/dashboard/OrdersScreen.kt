@@ -103,14 +103,14 @@ private fun loadHeldOrders(context: Context, allProducts: List<ProductEntity>): 
 
 // ── Cups Persistence ──
 
-private fun loadCupCount(context: Context): Int {
+private fun loadCupCount(context: Context, type: String): Int {
     val prefs = context.getSharedPreferences("catchup_pos_prefs", Context.MODE_PRIVATE)
-    return prefs.getInt("cups_available", 0)
+    return prefs.getInt("cups_${type}_available", 0)
 }
 
-private fun saveCupCount(context: Context, count: Int) {
+private fun saveCupCount(context: Context, type: String, count: Int) {
     val prefs = context.getSharedPreferences("catchup_pos_prefs", Context.MODE_PRIVATE)
-    prefs.edit().putInt("cups_available", count).apply()
+    prefs.edit().putInt("cups_${type}_available", count).apply()
 }
 
 // ── Main Orders Screen ──
@@ -135,7 +135,9 @@ fun OrdersScreen(
     var showHeldOrdersDialog by remember { mutableStateOf(false) }
     var showPaymentDialog by remember { mutableStateOf(false) }
     var checkoutData by remember { mutableStateOf<CheckoutData?>(null) }
-    var cupsAvailable by remember { mutableIntStateOf(loadCupCount(context)) }
+    var cupsAvailable by remember { mutableIntStateOf(loadCupCount(context, "hot") + loadCupCount(context, "cold")) }
+    var hotCupsAvailable by remember { mutableIntStateOf(loadCupCount(context, "hot")) }
+    var coldCupsAvailable by remember { mutableIntStateOf(loadCupCount(context, "cold")) }
 
     fun holdOrder() {
         if (cartItems.isNotEmpty()) {
@@ -162,7 +164,9 @@ fun OrdersScreen(
         drinkProducts = allProducts.filter { it.type == "DRINK" && it.isActive }
         dbCategories = repository.allCategoriesOnce()
         heldOrders = loadHeldOrders(context, allProducts)
-        cupsAvailable = loadCupCount(context)
+        cupsAvailable = loadCupCount(context, "hot") + loadCupCount(context, "cold")
+        hotCupsAvailable = loadCupCount(context, "hot")
+        coldCupsAvailable = loadCupCount(context, "cold")
     }
 
     // Filtered products
@@ -510,12 +514,17 @@ fun OrdersScreen(
                     }
                     repository.insertOrderItems(orderItems)
 
-                    // Deduct cups for drink orders (each drink uses 1 cup)
-                    val drinkCount = cartItems.filter { it.product.type == "DRINK" }.sumOf { it.quantity }
-                    if (drinkCount > 0) {
-                        cupsAvailable = maxOf(0, cupsAvailable - drinkCount)
-                        saveCupCount(context, cupsAvailable)
+                    // Deduct cups per item based on product temperature
+                    cartItems.filter { it.product.type == "DRINK" }.forEach { item ->
+                        if (item.product.temperature == "HOT" && hotCupsAvailable > 0) {
+                            hotCupsAvailable = maxOf(0, hotCupsAvailable - item.quantity)
+                        } else if (item.product.temperature == "COLD" && coldCupsAvailable > 0) {
+                            coldCupsAvailable = maxOf(0, coldCupsAvailable - item.quantity)
+                        }
                     }
+                    saveCupCount(context, "hot", hotCupsAvailable)
+                    saveCupCount(context, "cold", coldCupsAvailable)
+                    cupsAvailable = hotCupsAvailable + coldCupsAvailable
                 }
 
                 checkoutData = CheckoutData(
@@ -1400,7 +1409,7 @@ private fun ItemCustomizationSheet(
         }
     }
     var sugarLevel by remember { mutableStateOf("100%") }
-    var iceLevel by remember { mutableStateOf("Regular Ice") }
+    var iceLevel by remember { mutableStateOf(if (product.temperature == "HOT") "No Ice" else "Regular Ice") }
     var specialInstructions by remember { mutableStateOf("") }
 
     val currentPrice = selectedVariant?.sellingPrice ?: product.sellingPrice

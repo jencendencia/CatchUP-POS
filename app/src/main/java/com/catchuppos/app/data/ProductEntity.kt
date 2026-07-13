@@ -21,6 +21,9 @@ data class ProductEntity(
     @ColumnInfo(name = "type")
     val type: String, // "DRINK" or "FOOD"
 
+    @ColumnInfo(name = "temperature")
+    val temperature: String = "HOT", // "HOT", "COLD", or "BOTH"
+
     @ColumnInfo(name = "selling_price")
     val sellingPrice: Double = 0.0,
 

@@ -36,10 +36,12 @@ fun KPICardsGrid(
     drinksSold: Int = 0,
     todaySales: Double = 0.0,
     totalDrinksAvailable: Int = 0,
-    cupsAvailable: Int = 0,
+    hotCupsAvailable: Int = 0,
+    coldCupsAvailable: Int = 0,
     onCupsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val cupsAvailable = hotCupsAvailable + coldCupsAvailable
     val cards = listOf(
         KPICardData(
             icon = Icons.Default.Receipt,
@@ -70,7 +72,7 @@ fun KPICardsGrid(
             iconBgColor = Color(0xFF2196F3),
             metric = "$cupsAvailable",
             label = "Cups Available",
-            footer = if (cupsAvailable > 0) "Tap to manage" else "Tap to set cups",
+            footer = "Hot: $hotCupsAvailable | Cold: $coldCupsAvailable",
             footerColor = Color(0xFF2196F3),
             isClickable = true
         )

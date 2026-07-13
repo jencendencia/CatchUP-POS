@@ -75,14 +75,14 @@ private fun loadCupOptions(context: Context): List<CupSizeOption> {
     }
 }
 
-private fun saveCupCount(context: Context, count: Int) {
+private fun saveCupCount(context: Context, type: String, count: Int) {
     val prefs = context.getSharedPreferences("catchup_pos_prefs", Context.MODE_PRIVATE)
-    prefs.edit().putInt("cups_available", count).apply()
+    prefs.edit().putInt("cups_${type}_available", count).apply()
 }
 
-private fun loadCupCount(context: Context): Int {
+private fun loadCupCount(context: Context, type: String): Int {
     val prefs = context.getSharedPreferences("catchup_pos_prefs", Context.MODE_PRIVATE)
-    return prefs.getInt("cups_available", 0)
+    return prefs.getInt("cups_${type}_available", 0)
 }
 @Composable
 fun DashboardScreen(
@@ -96,7 +96,9 @@ fun DashboardScreen(
     var drinksSold by remember { mutableIntStateOf(0) }
     var todaySales by remember { mutableDoubleStateOf(0.0) }
     var totalDrinksAvailable by remember { mutableIntStateOf(0) }
-    var cupsAvailable by remember { mutableIntStateOf(loadCupCount(context)) }
+    var cupsAvailable by remember { mutableIntStateOf(loadCupCount(context, "hot") + loadCupCount(context, "cold")) }
+    var hotCupsAvailable by remember { mutableIntStateOf(loadCupCount(context, "hot")) }
+    var coldCupsAvailable by remember { mutableIntStateOf(loadCupCount(context, "cold")) }
     var showCupsDialog by remember { mutableStateOf(false) }
     val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val scope = rememberCoroutineScope()
@@ -116,7 +118,9 @@ fun DashboardScreen(
         todaySales = repository.getTodaySales()
         totalDrinksAvailable = repository.getProductCount()
         drinksSold = repository.getTodayItemsSold()
-        cupsAvailable = loadCupCount(context)
+        hotCupsAvailable = loadCupCount(context, "hot")
+        coldCupsAvailable = loadCupCount(context, "cold")
+        cupsAvailable = hotCupsAvailable + coldCupsAvailable
     }
 
     // Refresh data when returning to dashboard
@@ -126,7 +130,9 @@ fun DashboardScreen(
             todaySales = repository.getTodaySales()
             totalDrinksAvailable = repository.getProductCount()
             drinksSold = repository.getTodayItemsSold()
-            cupsAvailable = loadCupCount(context)
+            hotCupsAvailable = loadCupCount(context, "hot")
+            coldCupsAvailable = loadCupCount(context, "cold")
+            cupsAvailable = hotCupsAvailable + coldCupsAvailable
         }
     }
 
@@ -168,7 +174,8 @@ fun DashboardScreen(
                                 drinksSold = drinksSold,
                                 todaySales = todaySales,
                                 totalDrinksAvailable = totalDrinksAvailable,
-                                cupsAvailable = cupsAvailable,
+                                hotCupsAvailable = hotCupsAvailable,
+                                coldCupsAvailable = coldCupsAvailable,
                                 onCupsClick = { showCupsDialog = true }
                             )
 
@@ -270,10 +277,18 @@ fun DashboardScreen(
     // Cups Dialog
     if (showCupsDialog) {
         CupsDialog(
-            currentCups = cupsAvailable,
-            onCupSelected = { count ->
-                cupsAvailable = count
-                saveCupCount(context, count)
+            currentHotCups = hotCupsAvailable,
+            currentColdCups = coldCupsAvailable,
+            onHotCupSelected = { count ->
+                hotCupsAvailable = count
+                saveCupCount(context, "hot", count)
+                cupsAvailable = hotCupsAvailable + coldCupsAvailable
+                showCupsDialog = false
+            },
+            onColdCupSelected = { count ->
+                coldCupsAvailable = count
+                saveCupCount(context, "cold", count)
+                cupsAvailable = hotCupsAvailable + coldCupsAvailable
                 showCupsDialog = false
             },
             onDismiss = { showCupsDialog = false }
@@ -287,8 +302,10 @@ fun DashboardScreen(
 
 @Composable
 private fun CupsDialog(
-    currentCups: Int,
-    onCupSelected: (Int) -> Unit,
+    currentHotCups: Int,
+    currentColdCups: Int,
+    onHotCupSelected: (Int) -> Unit,
+    onColdCupSelected: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -296,6 +313,7 @@ private fun CupsDialog(
     var customInput by remember { mutableStateOf("") }
     var showAddNew by remember { mutableStateOf(false) }
     var newOptionQuantity by remember { mutableStateOf("") }
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Hot, 1 = Cold
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -337,7 +355,54 @@ private fun CupsDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Hot/Cold Tabs
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = Color(0xFF2A2A2A),
+                    contentColor = OrangeAccent,
+                    divider = {}
+                ) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.LocalFireDepartment,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Hot", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal)
+                            }
+                        },
+                        selectedContentColor = OrangeAccent,
+                        unselectedContentColor = TextMuted
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.AcUnit,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Cold", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal)
+                            }
+                        },
+                        selectedContentColor = Color(0xFF2196F3),
+                        unselectedContentColor = TextMuted
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 // Current cups display
+                val currentCups = if (selectedTab == 0) currentHotCups else currentColdCups
+                val tabColor = if (selectedTab == 0) Color(0xFFFF9800) else Color(0xFF2196F3)
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = DarkCard,
@@ -349,9 +414,9 @@ private fun CupsDialog(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Coffee,
+                            imageVector = if (selectedTab == 0) Icons.Default.LocalFireDepartment else Icons.Default.AcUnit,
                             contentDescription = null,
-                            tint = Color(0xFF2196F3),
+                            tint = tabColor,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -375,7 +440,6 @@ private fun CupsDialog(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                val icons = listOf(Icons.Default.LooksOne, Icons.Default.LooksTwo, Icons.Default.Looks3, Icons.Default.Looks4)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     cupOptions.chunked(2).forEach { row ->
                         Row(
@@ -389,8 +453,10 @@ private fun CupsDialog(
                                     modifier = Modifier
                                         .weight(1f)
                                         .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isSelected) OrangeAccent.copy(alpha = 0.12f) else Color.Transparent)
-                                        .clickable { onCupSelected(quantity) }
+                                        .background(if (isSelected) tabColor.copy(alpha = 0.12f) else Color.Transparent)
+                                        .clickable {
+                                            if (selectedTab == 0) onHotCupSelected(quantity) else onColdCupSelected(quantity)
+                                        }
                                         .padding(12.dp),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
@@ -401,13 +467,13 @@ private fun CupsDialog(
                                             modifier = Modifier
                                                 .size(36.dp)
                                                 .clip(RoundedCornerShape(8.dp))
-                                                .background(OrangeAccent.copy(alpha = 0.15f)),
+                                                .background(tabColor.copy(alpha = 0.15f)),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
                                                 imageVector = option.icon,
                                                 contentDescription = null,
-                                                tint = OrangeAccent,
+                                                tint = tabColor,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
@@ -430,7 +496,7 @@ private fun CupsDialog(
                                             Icon(
                                                 imageVector = Icons.Default.Check,
                                                 contentDescription = null,
-                                                tint = OrangeAccent,
+                                                tint = tabColor,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         }
@@ -474,9 +540,9 @@ private fun CupsDialog(
                             keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
                         ),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = OrangeAccent,
+                            focusedBorderColor = tabColor,
                             unfocusedBorderColor = InputBorder,
-                            cursorColor = OrangeAccent,
+                            cursorColor = tabColor,
                             focusedTextColor = TextWhite,
                             unfocusedTextColor = TextWhite
                         )
@@ -485,13 +551,13 @@ private fun CupsDialog(
                         onClick = {
                             val count = customInput.toIntOrNull() ?: 0
                             if (count > 0) {
-                                onCupSelected(count)
+                                if (selectedTab == 0) onHotCupSelected(count) else onColdCupSelected(count)
                             }
                         },
                         modifier = Modifier.height(48.dp),
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = OrangeAccent,
+                            containerColor = tabColor,
                             contentColor = TextWhite
                         ),
                         enabled = customInput.toIntOrNull()?.let { it > 0 } == true

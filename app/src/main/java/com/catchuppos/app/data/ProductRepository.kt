@@ -1,5 +1,6 @@
 package com.catchuppos.app.data
 
+import androidx.sqlite.db.SimpleSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 
 class ProductRepository(
@@ -80,27 +81,27 @@ class ProductRepository(
         // Seed products with variants
         if (productDao.getProductCount() == 0) {
             val sampleProducts = listOf(
-                ProductEntity(title = "Macchiato", category = "Coffee", type = "DRINK", sellingPrice = 85.0),
-                ProductEntity(title = "Latte", category = "Coffee", type = "DRINK", sellingPrice = 95.0),
-                ProductEntity(title = "Cold Brew", category = "Coffee", description = "Cold Brew", type = "DRINK", sellingPrice = 80.0),
-                ProductEntity(title = "Spanish Latte", category = "Coffee", type = "DRINK", sellingPrice = 110.0),
-                ProductEntity(title = "Matcha Latte", category = "Non Coffee", type = "DRINK", sellingPrice = 95.0),
-                ProductEntity(title = "Strawberry Smoothie", category = "Non Coffee", type = "DRINK", sellingPrice = 90.0),
-                ProductEntity(title = "Iced Chocolate", category = "Non Coffee", type = "DRINK", sellingPrice = 85.0),
+                ProductEntity(title = "Macchiato", category = "Coffee", type = "DRINK", temperature = "HOT", sellingPrice = 85.0),
+                ProductEntity(title = "Latte", category = "Coffee", type = "DRINK", temperature = "HOT", sellingPrice = 95.0),
+                ProductEntity(title = "Cold Brew", category = "Coffee", description = "Cold Brew", type = "DRINK", temperature = "COLD", sellingPrice = 80.0),
+                ProductEntity(title = "Spanish Latte", category = "Coffee", type = "DRINK", temperature = "HOT", sellingPrice = 110.0),
+                ProductEntity(title = "Matcha Latte", category = "Non Coffee", type = "DRINK", temperature = "HOT", sellingPrice = 95.0),
+                ProductEntity(title = "Strawberry Smoothie", category = "Non Coffee", type = "DRINK", temperature = "COLD", sellingPrice = 90.0),
+                ProductEntity(title = "Iced Chocolate", category = "Non Coffee", type = "DRINK", temperature = "COLD", sellingPrice = 85.0),
                 ProductEntity(title = "Tocilog", category = "Food", description = "Tocino, Egg, Rice", type = "FOOD", sellingPrice = 130.0),
                 ProductEntity(title = "Bacon Silog", category = "Food", description = "Bacon, Egg, Rice", type = "FOOD", sellingPrice = 120.0),
                 ProductEntity(title = "Chicken Sandwich", category = "Food", description = "Grilled Chicken, Lettuce, Mayo", type = "FOOD", sellingPrice = 95.0),
                 ProductEntity(title = "Pancakes", category = "Food", description = "With Maple Syrup & Butter", type = "FOOD", sellingPrice = 110.0),
                 ProductEntity(title = "French Toast", category = "Food", type = "FOOD", sellingPrice = 105.0),
-                ProductEntity(title = "Americano", category = "Coffee", type = "DRINK", sellingPrice = 75.0),
-                ProductEntity(title = "Cappuccino", category = "Coffee", type = "DRINK", sellingPrice = 90.0),
-                ProductEntity(title = "Hot Tea", category = "Non Coffee", description = "Assorted Premium Teas", type = "DRINK", sellingPrice = 65.0),
-                ProductEntity(title = "Lemonade", category = "Non Coffee", description = "Fresh Squeezed", type = "DRINK", sellingPrice = 70.0),
+                ProductEntity(title = "Americano", category = "Coffee", type = "DRINK", temperature = "HOT", sellingPrice = 75.0),
+                ProductEntity(title = "Cappuccino", category = "Coffee", type = "DRINK", temperature = "HOT", sellingPrice = 90.0),
+                ProductEntity(title = "Hot Tea", category = "Non Coffee", description = "Assorted Premium Teas", type = "DRINK", temperature = "HOT", sellingPrice = 65.0),
+                ProductEntity(title = "Lemonade", category = "Non Coffee", description = "Fresh Squeezed", type = "DRINK", temperature = "COLD", sellingPrice = 70.0),
                 ProductEntity(title = "Clubhouse Sandwich", category = "Food", description = "Triple-decker with Fries", type = "FOOD", sellingPrice = 145.0),
                 ProductEntity(title = "Caesar Salad", category = "Food", type = "FOOD", sellingPrice = 85.0),
-                ProductEntity(title = "Mocha", category = "Coffee", type = "DRINK", sellingPrice = 100.0),
-                ProductEntity(title = "Caramel Latte", category = "Coffee", type = "DRINK", sellingPrice = 105.0),
-                ProductEntity(title = "Iced Tea", category = "Non Coffee", description = "Peach or Lemon", type = "DRINK", sellingPrice = 65.0),
+                ProductEntity(title = "Mocha", category = "Coffee", type = "DRINK", temperature = "HOT", sellingPrice = 100.0),
+                ProductEntity(title = "Caramel Latte", category = "Coffee", type = "DRINK", temperature = "HOT", sellingPrice = 105.0),
+                ProductEntity(title = "Iced Tea", category = "Non Coffee", description = "Peach or Lemon", type = "DRINK", temperature = "COLD", sellingPrice = 65.0),
                 ProductEntity(title = "Nachos", category = "Food", description = "With Cheese & Salsa", type = "FOOD", sellingPrice = 120.0)
             )
 
@@ -243,11 +244,19 @@ class ProductRepository(
     suspend fun getExpensesByDateRange(startTime: Long, endTime: Long): List<ExpenseEntity> =
         expenseDao.getExpensesByDateRange(startTime, endTime)
 
-    suspend fun getTotalExpensesByDateRange(startTime: Long, endTime: Long): Double =
-        expenseDao.getTotalExpensesByDateRange(startTime, endTime) ?: 0.0
+    suspend fun getTotalExpensesByDateRange(startTime: Long, endTime: Long): Double {
+        val query = SimpleSQLiteQuery(
+            "SELECT SUM(syrups + sauce + milk + ice + others) FROM expenses WHERE date BETWEEN $startTime AND $endTime"
+        )
+        return expenseDao.getTotalExpensesByDateRangeRaw(query) ?: 0.0
+    }
 
-    suspend fun getExpenseCategoryTotals(startTime: Long, endTime: Long): ExpenseCategoryTotals? =
-        expenseDao.getExpenseCategoryTotals(startTime, endTime)
+    suspend fun getExpenseCategoryTotals(startTime: Long, endTime: Long): ExpenseCategoryTotals? {
+        val query = SimpleSQLiteQuery(
+            "SELECT SUM(syrups) AS syrups, SUM(sauce) AS sauce, SUM(milk) AS milk, SUM(ice) AS ice, SUM(others) AS others FROM expenses WHERE date BETWEEN $startTime AND $endTime"
+        )
+        return expenseDao.getExpenseCategoryTotalsRaw(query)
+    }
 
     suspend fun getExpensesByDateRangeAsc(startTime: Long, endTime: Long): List<ExpenseEntity> =
         expenseDao.getExpensesByDateRangeAsc(startTime, endTime)

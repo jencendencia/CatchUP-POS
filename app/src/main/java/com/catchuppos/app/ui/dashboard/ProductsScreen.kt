@@ -2128,6 +2128,7 @@ private fun AddProductScreen(
     var productName by remember(editingProduct) { mutableStateOf(editingProduct?.title ?: "") }
     var selectedCategory by remember(editingProduct) { mutableStateOf(initialCategory) }
     var productType by remember(editingProduct) { mutableStateOf(initialType) }
+    var temperature by remember(editingProduct) { mutableStateOf(editingProduct?.temperature ?: "HOT") }
     var description by remember(editingProduct) { mutableStateOf(editingProduct?.description ?: "") }
     var isActive by remember(editingProduct) { mutableStateOf(editingProduct?.isActive ?: true) }
 
@@ -2329,6 +2330,38 @@ private fun AddProductScreen(
                                 )
                             )
                             Text("Food", color = TextWhite, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+
+                    // Temperature (only for drinks)
+                    if (productType == ProductType.DRINK) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FormFieldLabel(label = "Cup Temperature")
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(
+                                    selected = temperature == "HOT",
+                                    onClick = { temperature = "HOT" },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = Color(0xFFFF9800),
+                                        unselectedColor = TextMuted
+                                    )
+                                )
+                                Text("Hot", color = TextWhite, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(
+                                    selected = temperature == "COLD",
+                                    onClick = { temperature = "COLD" },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = Color(0xFF2196F3),
+                                        unselectedColor = TextMuted
+                                    )
+                                )
+                                Text("Cold", color = TextWhite, style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
 
@@ -2829,6 +2862,7 @@ private fun AddProductScreen(
                             description = description.ifBlank { null },
                             category = selectedCategory.displayName,
                             type = if (productType == ProductType.DRINK) "DRINK" else "FOOD",
+                            temperature = if (productType == ProductType.DRINK) temperature else "HOT",
                             sellingPrice = defaultVariantPrice,
                             costPrice = costPrice.toDoubleOrNull()?.takeIf { it > 0 },
                             isActive = isActive,
