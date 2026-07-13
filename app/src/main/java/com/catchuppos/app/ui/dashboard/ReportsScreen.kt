@@ -268,7 +268,9 @@ fun ExpensesKPICard(label: String, value: String, valueColor: Color, trend: Stri
 // ════════════════════════════════════════════════════════════════════
 
 @Composable
-fun ReportsScreen() {
+fun ReportsScreen(
+    onNavigate: (NavItem) -> Unit = {}
+) {
     val context = LocalContext.current
     val app = context.applicationContext as CatchUpApp
     val repository = app.productRepository
@@ -361,7 +363,8 @@ fun ReportsScreen() {
                 categorySales = categorySales,
                 topProducts = topProducts,
                 paymentMethods = paymentMethods,
-                recentTransactions = recentTransactions
+                recentTransactions = recentTransactions,
+                onNavigate = onNavigate
             )
             ReportSubTab.SALES -> SalesTabContent(
                 dailySales = dailySales,
@@ -638,7 +641,8 @@ private fun OverviewContent(
     categorySales: List<CategorySalesSummary>,
     topProducts: List<TopSellingProduct>,
     paymentMethods: List<PaymentMethodSales>,
-    recentTransactions: List<TransactionEntity>
+    recentTransactions: List<TransactionEntity>,
+    onNavigate: (NavItem) -> Unit = {}
 ) {
     // ── KPI Cards Row ──
     Row(
@@ -749,7 +753,7 @@ private fun OverviewContent(
                 Spacer(modifier = Modifier.height(12.dp))
                 TopProductsTable(products = topProducts)
                 Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = { /* navigate to products */ }) {
+                TextButton(onClick = { onNavigate(NavItem.PRODUCTS) }) {
                     Text("View all products >", color = OrangeAccent, style = MaterialTheme.typography.bodySmall)
                 }
             }
@@ -785,14 +789,14 @@ private fun OverviewContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("RECENT TRANSACTIONS", style = MaterialTheme.typography.labelSmall, color = TextMuted, letterSpacing = 1.sp)
-                    TextButton(onClick = { /* navigate to transactions */ }) {
+                    TextButton(onClick = { onNavigate(NavItem.TRANSACTIONS) }) {
                         Text("View All", color = OrangeAccent, style = MaterialTheme.typography.bodySmall)
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 RecentTransactionsTable(transactions = recentTransactions)
                 Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = { /* navigate to transactions */ }) {
+                TextButton(onClick = { onNavigate(NavItem.TRANSACTIONS) }) {
                     Text("View all transactions >", color = OrangeAccent, style = MaterialTheme.typography.bodySmall)
                 }
             }

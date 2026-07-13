@@ -224,7 +224,9 @@ fun DashboardScreen(
                     }
 
                     NavItem.REPORTS -> {
-                        ReportsScreen()
+                        ReportsScreen(
+                            onNavigate = { navItem -> activeNavItem = navItem }
+                        )
                     }
 
                     NavItem.PROFIT -> {
