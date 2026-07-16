@@ -5,8 +5,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -44,6 +46,7 @@ enum class NavItem(
     PROFIT("Profit", Icons.Filled.TrendingUp, Icons.Outlined.TrendingUp, adminOnly = true),
     EXPENSES("Expenses", Icons.Filled.MoneyOff, Icons.Outlined.MoneyOff, adminOnly = true),
     CUSTOMERS("Customers", Icons.Filled.People, Icons.Outlined.People, adminOnly = true),
+    USERS("Users", Icons.Filled.SupervisorAccount, Icons.Outlined.SupervisorAccount, adminOnly = true),
     SETTINGS("Settings", Icons.Filled.Settings, Icons.Outlined.Settings, adminOnly = true)
 }
 
@@ -165,6 +168,7 @@ fun Sidebar(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = if (isCollapsed) 8.dp else 12.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {

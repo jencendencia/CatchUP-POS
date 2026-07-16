@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.style.TextAlign
 import com.catchuppos.app.CatchUpApp
 import com.catchuppos.app.auth.AuthState
@@ -518,15 +520,42 @@ private fun ProductCard(
     onEdit: () -> Unit = {}
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val imageBitmap = remember(product.imagePath) {
+        product.imagePath?.let { android.graphics.BitmapFactory.decodeFile(it) }
+    }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().height(200.dp),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Box {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Background image
+            if (imageBitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = imageBitmap.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            // Gradient overlay: transparent at top, dark at bottom
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.1f),
+                                Color.Black.copy(alpha = 0.75f)
+                            )
+                        )
+                    )
+            )
+
             // More Actions Menu Button (Admin only)
             if (AuthState.isAdmin) {
                 Box(
@@ -572,51 +601,32 @@ private fun ProductCard(
                 }
             }
 
+            // Text content at bottom
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
                     .padding(6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Product Image or Initials
-                if (product.imagePath != null) {
-                    val imageBitmap = remember(product.imagePath) {
-                        android.graphics.BitmapFactory.decodeFile(product.imagePath)
-                    }
-                    if (imageBitmap != null) {
-                        androidx.compose.foundation.Image(
-                            bitmap = imageBitmap.asImageBitmap(),
-                            contentDescription = product.title,
-                            modifier = Modifier
-                                .size(120.dp)
-                                .clip(RoundedCornerShape(10.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Text(
-                            text = product.title.take(2).uppercase(),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = OrangeAccent,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                } else {
+                // Product initials (only if no image)
+                if (imageBitmap == null) {
                     Text(
                         text = product.title.take(2).uppercase(),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            shadow = Shadow(color = Color.Black, offset = Offset(0f, 2f), blurRadius = 6f)
+                        ),
                         color = OrangeAccent,
                         fontWeight = FontWeight.Bold
                     )
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
-
                 // Title
                 Text(
                     text = product.title,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        shadow = Shadow(color = Color.Black, offset = Offset(0f, 2f), blurRadius = 6f)
+                    ),
                     color = TextWhite,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -629,7 +639,9 @@ private fun ProductCard(
                     Spacer(modifier = Modifier.height(1.dp))
                     Text(
                         text = product.description,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            shadow = Shadow(color = Color.Black, offset = Offset(0f, 1f), blurRadius = 4f)
+                        ),
                         color = TextGray,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -649,24 +661,24 @@ private fun ProductCard(
                 }
                 Text(
                     text = priceText,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        shadow = Shadow(color = Color.Black, offset = Offset(0f, 2f), blurRadius = 6f)
+                    ),
                     color = OrangeAccent,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(1.dp))
-
                 // Status
                 Text(
                     text = if (product.isActive) "Active" else "Inactive",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        shadow = Shadow(color = Color.Black, offset = Offset(0f, 1f), blurRadius = 4f)
+                    ),
                     color = if (product.isActive) StatusGreen else TextGray,
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center
                 )
-
-                Spacer(modifier = Modifier.height(4.dp))
             }
         }
     }

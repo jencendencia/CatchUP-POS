@@ -241,6 +241,10 @@ fun DashboardScreen(
                         CustomersScreen()
                     }
 
+                    NavItem.USERS -> {
+                        UsersScreen()
+                    }
+
                     NavItem.SETTINGS -> {
                         SettingsScreen(
                             onRestoreComplete = {

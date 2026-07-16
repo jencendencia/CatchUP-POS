@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -611,69 +613,87 @@ private fun MenuItemCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val imageBitmap = remember(product.imagePath) {
+        product.imagePath?.let { android.graphics.BitmapFactory.decodeFile(it) }
+    }
+
     Card(
-        modifier = modifier.fillMaxWidth().clickable { onClick() },
+        modifier = modifier.fillMaxWidth().height(200.dp).clickable { onClick() },
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Product Thumbnail (image or plain initials)
-            if (product.imagePath != null) {
-                val bitmap = remember(product.imagePath) {
-                    android.graphics.BitmapFactory.decodeFile(product.imagePath)
-                }
-                if (bitmap != null) {
-                    androidx.compose.foundation.Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = product.title,                            modifier = Modifier
-                                .size(120.dp)
-                                .clip(RoundedCornerShape(10.dp)),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Background image
+            if (imageBitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = imageBitmap.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            }
+
+            // Gradient overlay: transparent at top, dark at bottom
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.1f),
+                                Color.Black.copy(alpha = 0.75f)
+                            )
+                        )
                     )
-                } else {
+            )
+
+            // Text content at bottom
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .padding(8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Product initials (only if no image)
+                if (imageBitmap == null) {
                     Text(
                         text = product.title.take(2).uppercase(),
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            shadow = Shadow(color = Color.Black, offset = Offset(0f, 2f), blurRadius = 6f)
+                        ),
                         color = OrangeAccent,
                         fontWeight = FontWeight.Bold
                     )
                 }
-            } else {
+
+                // Title (uppercase)
                 Text(
-                    text = product.title.take(2).uppercase(),
-                    style = MaterialTheme.typography.titleSmall,
+                    text = product.title.uppercase(),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        shadow = Shadow(color = Color.Black, offset = Offset(0f, 2f), blurRadius = 6f)
+                    ),
+                    color = TextWhite,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // Price
+                Text(
+                    text = "₱${String.format("%.0f", product.sellingPrice)}.00",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        shadow = Shadow(color = Color.Black, offset = Offset(0f, 2f), blurRadius = 6f)
+                    ),
                     color = OrangeAccent,
                     fontWeight = FontWeight.Bold
                 )
             }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Title (uppercase)
-            Text(
-                text = product.title.uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = TextWhite,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            // Price
-            Text(
-                text = "₱${String.format("%.0f", product.sellingPrice)}.00",
-                style = MaterialTheme.typography.labelMedium,
-                color = OrangeAccent,
-                fontWeight = FontWeight.Bold
-            )
         }
     }
 }
