@@ -128,6 +128,21 @@ class ProductRepository(
 
     suspend fun insertTransaction(transaction: TransactionEntity): Long = transactionDao.insertTransaction(transaction)
 
+    /**
+     * Get active (non-completed) transactions with their order items, ready for KDS dispatch.
+     * Returns pairs of (transaction, items).
+     */
+    suspend fun getActiveTransactionsWithItems(): List<Pair<TransactionEntity, List<OrderItemEntity>>> {
+        val activeTransactions = transactionDao.getTransactionsByStatuses(listOf("Preparing", "Ready"))
+        return activeTransactions.map { txn ->
+            val items = orderItemDao.getOrderItemsByTransactionId(txn.id)
+            txn to items
+        }
+    }
+
+    suspend fun getTransactionByTransactionId(transactionId: String): TransactionEntity? =
+        transactionDao.getTransactionByTransactionId(transactionId)
+
     suspend fun updateTransactionStatus(transactionId: Int, newStatus: String) = transactionDao.updateTransactionStatus(transactionId, newStatus)
 
     suspend fun getAllTransactionsOnce(): List<TransactionEntity> = transactionDao.getAllTransactionsOnce()

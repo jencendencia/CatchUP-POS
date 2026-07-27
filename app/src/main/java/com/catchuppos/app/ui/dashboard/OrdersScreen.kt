@@ -37,6 +37,7 @@ import com.catchuppos.app.CatchUpApp
 import com.catchuppos.app.data.OrderItemEntity
 import com.catchuppos.app.data.ProductEntity
 import com.catchuppos.app.data.ProductVariantEntity
+import com.catchuppos.app.network.KdsOrderSerializer
 import com.catchuppos.app.theme.*
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -113,6 +114,26 @@ private fun loadCupCount(context: Context, type: String): Int {
 private fun saveCupCount(context: Context, type: String, count: Int) {
     val prefs = context.getSharedPreferences("catchup_pos_prefs", Context.MODE_PRIVATE)
     prefs.edit().putInt("cups_${type}_available", count).apply()
+}
+
+
+// ── Helper to dispatch order to KDS ──
+
+private fun dispatchOrderToKds(
+    app: com.catchuppos.app.CatchUpApp,
+    transaction: com.catchuppos.app.data.TransactionEntity,
+    orderItems: List<com.catchuppos.app.data.OrderItemEntity>
+) {
+    if (app.kdsServer == null) {
+        android.util.Log.d("OrdersScreen", "KDS server not running, skipping dispatch")
+        return
+    }
+    val orderJson = KdsOrderSerializer.serialize(
+        transaction = transaction,
+        orderItems = orderItems,
+        terminalId = app.kdsSettingsManager.getLocalIpAddress(app)
+    )
+    app.broadcastToKds(orderJson)
 }
 
 // ── Main Orders Screen ──
@@ -485,22 +506,21 @@ fun OrdersScreen(
 
                 // Save transaction and order items to database
                 scope.launch {
-                    val txnId = repository.insertTransaction(
-                        com.catchuppos.app.data.TransactionEntity(
-                            customerName = customerName,
-                            itemsJson = itemsSummary,
-                            itemCount = totalItemCount,
-                            total = subtotal,
-                            amountTendered = amountTendered,
-                            changeReturned = amountTendered - subtotal,
-                            paymentMethod = paymentMethod,
-                            status = "Preparing",
-                            transactionId = generateTransactionId(),
-                            cashierId = com.catchuppos.app.auth.AuthState.currentUser?.id ?: 0,
-                            cashierName = com.catchuppos.app.auth.AuthState.currentUser?.username ?: "",
-                            createdAt = System.currentTimeMillis()
-                        )
+                    val transaction = com.catchuppos.app.data.TransactionEntity(
+                        customerName = customerName,
+                        itemsJson = itemsSummary,
+                        itemCount = totalItemCount,
+                        total = subtotal,
+                        amountTendered = amountTendered,
+                        changeReturned = amountTendered - subtotal,
+                        paymentMethod = paymentMethod,
+                        status = "Preparing",
+                        transactionId = generateTransactionId(),
+                        cashierId = com.catchuppos.app.auth.AuthState.currentUser?.id ?: 0,
+                        cashierName = com.catchuppos.app.auth.AuthState.currentUser?.username ?: "",
+                        createdAt = System.currentTimeMillis()
                     )
+                    val txnId = repository.insertTransaction(transaction)
 
                     // Save individual order items
                     val orderItems = cartItems.map { cartItem ->
@@ -527,6 +547,10 @@ fun OrdersScreen(
                     saveCupCount(context, "hot", hotCupsAvailable)
                     saveCupCount(context, "cold", coldCupsAvailable)
                     cupsAvailable = hotCupsAvailable + coldCupsAvailable
+
+                    // Dispatch order to KDS after saving to database
+                    val savedTransaction = transaction.copy(id = txnId.toInt())
+                    dispatchOrderToKds(app, savedTransaction, orderItems)
                 }
 
                 checkoutData = CheckoutData(

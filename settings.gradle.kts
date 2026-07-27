@@ -18,5 +18,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "CatchUP_POS"
+rootProject.name = "CatchUP_KDS"
 include(":app")

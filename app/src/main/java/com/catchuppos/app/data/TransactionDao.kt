@@ -38,6 +38,12 @@ interface TransactionDao {
     @Query("SELECT COUNT(*) FROM transactions WHERE created_at >= :startOfDay")
     suspend fun getTodayCustomersServed(startOfDay: Long): Int
 
+    @Query("SELECT * FROM transactions WHERE status IN (:statuses) ORDER BY created_at DESC")
+    suspend fun getTransactionsByStatuses(statuses: List<String>): List<TransactionEntity>
+
+    @Query("SELECT * FROM transactions WHERE transaction_id = :transactionId LIMIT 1")
+    suspend fun getTransactionByTransactionId(transactionId: String): TransactionEntity?
+
     @Query("UPDATE transactions SET status = :newStatus WHERE id = :transactionId")
     suspend fun updateTransactionStatus(transactionId: Int, newStatus: String)
 

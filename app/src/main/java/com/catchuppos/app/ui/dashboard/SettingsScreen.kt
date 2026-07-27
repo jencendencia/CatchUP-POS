@@ -213,136 +213,151 @@ fun SettingsScreen(
             modifier = Modifier.padding(bottom = 12.dp)
         )
 
-        if (users.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "No users registered",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = TextMuted
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Users
+            items(users) { user ->
+                UserCard(
+                    user = user,
+                    isCurrentUser = user.id == AuthState.currentUser?.id,
+                    isAdmin = AuthState.isAdmin,
+                    onEdit = { editingUser = user },
+                    onDelete = { showDeleteConfirmation = user }
                 )
             }
-        } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(users) { user ->
-                    UserCard(
-                        user = user,
-                        isCurrentUser = user.id == AuthState.currentUser?.id,
-                        isAdmin = AuthState.isAdmin,
-                        onEdit = { editingUser = user },
-                        onDelete = { showDeleteConfirmation = user }
-                    )
-                }
-            }
-        }
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // Database Management Section
-        if (AuthState.isAdmin) {
-            Text(
-                text = "DATABASE MANAGEMENT",
-                style = MaterialTheme.typography.labelSmall,
-                color = TextMuted,
-                letterSpacing = 1.5.sp,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D))
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Backup Button
-                    OutlinedButton(
-                        onClick = {
-                            val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
-                            val fileName = "catchup_pos_backup_${dateFormat.format(Date())}.zip"
-                            backupLauncher.launch(fileName)
-                        },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = Color(0xFF1A1A1A),
-                            contentColor = TextWhite
-                        )
+            // Empty users state
+            if (users.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Backup,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = StatusGreen
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Backup Database & Images",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "Save a copy of your data and images",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextMuted
-                            )
-                        }
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            tint = TextMuted,
-                            modifier = Modifier.size(20.dp)
+                        Text(
+                            text = "No users registered",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = TextMuted
                         )
                     }
+                }
+            }
 
-                    // Restore Button
-                    OutlinedButton(
-                        onClick = {
-                            restoreLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
-                        },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = Color(0xFF1A1A1A),
-                            contentColor = TextWhite
-                        )
+            // ── KDS Server Section ──
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
+                KdsServerSection(
+                    app = app,
+                    isAdmin = AuthState.isAdmin
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // ── Database Management Section ──
+            if (AuthState.isAdmin) {
+                item {
+                    Text(
+                        text = "DATABASE MANAGEMENT",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted,
+                        letterSpacing = 1.5.sp,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D))
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Restore,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = OrangeAccent
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Restore Database",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "Load data and images from a backup file",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextMuted
-                            )
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Backup Button
+                            OutlinedButton(
+                                onClick = {
+                                    val dateFormat = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+                                    val fileName = "catchup_pos_backup_${dateFormat.format(Date())}.zip"
+                                    backupLauncher.launch(fileName)
+                                },
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color(0xFF1A1A1A),
+                                    contentColor = TextWhite
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Backup,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = StatusGreen
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Backup Database & Images",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "Save a copy of your data and images",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextMuted
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // Restore Button
+                            OutlinedButton(
+                                onClick = {
+                                    restoreLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
+                                },
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    containerColor = Color(0xFF1A1A1A),
+                                    contentColor = TextWhite
+                                )
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Restore,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                    tint = OrangeAccent
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Restore Database",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "Load data and images from a backup file",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextMuted
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = null,
-                            tint = TextMuted,
-                            modifier = Modifier.size(20.dp)
-                        )
                     }
                 }
             }

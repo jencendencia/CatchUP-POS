@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("org.jetbrains.kotlin.plugin.compose")
 }
@@ -46,10 +45,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
     }
@@ -91,8 +86,11 @@ dependencies {
     ksp("androidx.room:room-compiler:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
 
-    // Networking (for update checker)
+    // Networking (for update checker & KDS WebSocket server)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // WebSocket server (for KDS companion integration)
+    implementation("org.java-websocket:Java-WebSocket:1.5.6")
 
     // Security (encrypted storage for license key)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
