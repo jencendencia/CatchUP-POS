@@ -599,7 +599,7 @@ private fun CupsDialog(
                     onQuickSelect = { count -> onHotCupsChanged(count) },
                     onSet = {
                         val count = hotInput.toIntOrNull() ?: 0
-                        if (count > 0) {
+                        if (count >= 0) {
                             onHotCupsChanged(count)
                             hotInput = ""
                         }
@@ -622,7 +622,7 @@ private fun CupsDialog(
                     onQuickSelect = { count -> onColdCupsChanged(count) },
                     onSet = {
                         val count = coldInput.toIntOrNull() ?: 0
-                        if (count > 0) {
+                        if (count >= 0) {
                             onColdCupsChanged(count)
                             coldInput = ""
                         }
@@ -872,7 +872,7 @@ private fun CupAmountSection(
                     containerColor = color,
                     contentColor = TextWhite
                 ),
-                enabled = input.toIntOrNull()?.let { it > 0 } == true
+                enabled = input.toIntOrNull() != null
             ) {
                 Text("Set", fontWeight = FontWeight.Bold)
             }
