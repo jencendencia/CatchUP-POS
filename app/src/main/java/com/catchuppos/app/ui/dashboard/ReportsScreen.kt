@@ -461,7 +461,8 @@ fun ReportsScreen(
                 topProducts = topProducts,
                 paymentMethods = paymentMethods,
                 recentTransactions = recentTransactions,
-                onNavigate = onNavigate
+                onNavigate = onNavigate,
+                onViewFullReport = { activeSubTab = ReportSubTab.SALES }
             )
             ReportSubTab.SALES -> SalesTabContent(
                 dailySales = dailySales,
@@ -739,7 +740,8 @@ private fun OverviewContent(
     topProducts: List<TopSellingProduct>,
     paymentMethods: List<PaymentMethodSales>,
     recentTransactions: List<TransactionEntity>,
-    onNavigate: (NavItem) -> Unit = {}
+    onNavigate: (NavItem) -> Unit = {},
+    onViewFullReport: () -> Unit = {}
 ) {
     // ── KPI Cards Row ──
     Row(
@@ -867,7 +869,7 @@ private fun OverviewContent(
                 Spacer(modifier = Modifier.height(12.dp))
                 PaymentDonutChart(paymentMethods = paymentMethods, modifier = Modifier.fillMaxWidth().height(180.dp))
                 Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = { /* navigate to full report */ }) {
+                TextButton(onClick = onViewFullReport) {
                     Text("View full report >", color = OrangeAccent, style = MaterialTheme.typography.bodySmall)
                 }
             }

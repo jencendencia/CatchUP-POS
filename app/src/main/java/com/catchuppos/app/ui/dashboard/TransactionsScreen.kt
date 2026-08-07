@@ -87,6 +87,8 @@ fun TransactionsScreen() {
     // Metrics
     val totalOrders = filteredTransactions.size
     val totalSales = filteredTransactions.sumOf { it.total }
+    val totalCash = filteredTransactions.filter { it.paymentMethod.equals("Cash", ignoreCase = true) }.sumOf { it.total }
+    val totalGcash = filteredTransactions.filter { it.paymentMethod.equals("GCash", ignoreCase = true) }.sumOf { it.total }
     val totalItemsSold = filteredTransactions.sumOf { it.itemCount }
     val completedOrders = filteredTransactions.count { it.status == "Completed" }
     val preparingOrders = filteredTransactions.count { it.status == "Preparing" }
@@ -193,6 +195,28 @@ fun TransactionsScreen() {
                 label = "Total Sales",
                 modifier = Modifier.weight(1f)
             )
+            MetricCard(
+                icon = Icons.Default.Payments,
+                iconBg = StatusGreen,
+                value = "₱${String.format("%,.2f", totalCash)}",
+                label = "Total Cash",
+                modifier = Modifier.weight(1f)
+            )
+            MetricCard(
+                icon = Icons.Default.PhoneAndroid,
+                iconBg = Color(0xFF2196F3),
+                value = "₱${String.format("%,.2f", totalGcash)}",
+                label = "Total GCash",
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             MetricCard(
                 icon = Icons.Default.Coffee,
                 iconBg = OrangeAccent,

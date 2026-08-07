@@ -27,7 +27,8 @@ data class KPICardData(
     val footer: String,
     val footerColor: androidx.compose.ui.graphics.Color,
     val iconTint: androidx.compose.ui.graphics.Color = TextWhite,
-    val isClickable: Boolean = false
+    val isClickable: Boolean = false,
+    val isSalesToday: Boolean = false
 )
 
 @Composable
@@ -39,6 +40,7 @@ fun KPICardsGrid(
     hotCupsAvailable: Int = 0,
     coldCupsAvailable: Int = 0,
     onCupsClick: () -> Unit = {},
+    onSalesTodayClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val cupsAvailable = hotCupsAvailable + coldCupsAvailable
@@ -65,7 +67,9 @@ fun KPICardsGrid(
             metric = "₱${String.format("%,.2f", todaySales)}",
             label = "Today's Sales",
             footer = if (todaySales > 0) "Sales today" else "No orders yet today",
-            footerColor = OrangeMuted
+            footerColor = OrangeMuted,
+            isClickable = true,
+            isSalesToday = true
         ),
         KPICardData(
             icon = Icons.Default.Coffee,
@@ -88,7 +92,9 @@ fun KPICardsGrid(
             KPIStatCard(
                 data = card,
                 modifier = Modifier.weight(1f),
-                onClick = if (card.isClickable) onCupsClick else null
+                onClick = if (card.isClickable) {
+                    if (card.isSalesToday) onSalesTodayClick else onCupsClick
+                } else null
             )
         }
     }

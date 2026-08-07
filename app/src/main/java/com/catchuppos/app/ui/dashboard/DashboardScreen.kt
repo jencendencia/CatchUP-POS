@@ -23,12 +23,17 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.catchuppos.app.CatchUpApp
 import com.catchuppos.app.auth.AuthState
+import com.catchuppos.app.data.PaymentMethodSales
 import com.catchuppos.app.theme.*
 import com.catchuppos.app.update.UpdateChecker
 import com.catchuppos.app.update.UpdateInfo
 import com.catchuppos.app.ui.update.UpdateDialog
 import kotlinx.coroutines.launch
 import org.json.JSONArray
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 // ── Cup size option data model ──
 private data class CupSizeOption(
@@ -100,6 +105,8 @@ fun DashboardScreen(
     var hotCupsAvailable by remember { mutableIntStateOf(loadCupCount(context, "hot")) }
     var coldCupsAvailable by remember { mutableIntStateOf(loadCupCount(context, "cold")) }
     var showCupsDialog by remember { mutableStateOf(false) }
+    var showSalesTodayDialog by remember { mutableStateOf(false) }
+    var todayPaymentMethods by remember { mutableStateOf<List<PaymentMethodSales>>(emptyList()) }
     val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val scope = rememberCoroutineScope()
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -121,6 +128,13 @@ fun DashboardScreen(
         hotCupsAvailable = loadCupCount(context, "hot")
         coldCupsAvailable = loadCupCount(context, "cold")
         cupsAvailable = hotCupsAvailable + coldCupsAvailable
+    }
+
+    // Load today's payment-method breakdown when the Sales Today dialog opens
+    LaunchedEffect(showSalesTodayDialog) {
+        if (showSalesTodayDialog) {
+            todayPaymentMethods = repository.getSalesByPaymentMethod(getTodayStartMillis(), System.currentTimeMillis())
+        }
     }
 
     // Refresh data when returning to dashboard
@@ -176,7 +190,8 @@ fun DashboardScreen(
                                 totalDrinksAvailable = totalDrinksAvailable,
                                 hotCupsAvailable = hotCupsAvailable,
                                 coldCupsAvailable = coldCupsAvailable,
-                                onCupsClick = { showCupsDialog = true }
+                                onCupsClick = { showCupsDialog = true },
+                                onSalesTodayClick = { showSalesTodayDialog = true }
                             )
 
                             Spacer(modifier = Modifier.height(24.dp))
@@ -280,46 +295,61 @@ fun DashboardScreen(
         )
     }
 
+    // Sales Today Dialog
+    if (showSalesTodayDialog) {
+        SalesTodayDialog(
+            totalSales = todaySales,
+            paymentMethods = todayPaymentMethods,
+            onDismiss = { showSalesTodayDialog = false }
+        )
+    }
+
     // Cups Dialog
     if (showCupsDialog) {
         CupsDialog(
             currentHotCups = hotCupsAvailable,
             currentColdCups = coldCupsAvailable,
-            onHotCupSelected = { count ->
+            onHotCupsChanged = { count ->
                 hotCupsAvailable = count
                 saveCupCount(context, "hot", count)
                 cupsAvailable = hotCupsAvailable + coldCupsAvailable
-                showCupsDialog = false
             },
-            onColdCupSelected = { count ->
+            onColdCupsChanged = { count ->
                 coldCupsAvailable = count
                 saveCupCount(context, "cold", count)
                 cupsAvailable = hotCupsAvailable + coldCupsAvailable
-                showCupsDialog = false
             },
             onDismiss = { showCupsDialog = false }
         )
     }
 }
 
+private fun getTodayStartMillis(): Long {
+    val cal = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return cal.timeInMillis
+}
+
 // ════════════════════════════════════════════════════════════════════
-// Cups Dialog
+// Sales Today Dialog (Cash / GCash breakdown)
 // ════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun CupsDialog(
-    currentHotCups: Int,
-    currentColdCups: Int,
-    onHotCupSelected: (Int) -> Unit,
-    onColdCupSelected: (Int) -> Unit,
+private fun SalesTodayDialog(
+    totalSales: Double,
+    paymentMethods: List<PaymentMethodSales>,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
-    var cupOptions by remember { mutableStateOf(loadCupOptions(context)) }
-    var customInput by remember { mutableStateOf("") }
-    var showAddNew by remember { mutableStateOf(false) }
-    var newOptionQuantity by remember { mutableStateOf("") }
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Hot, 1 = Cold
+    val dateText = remember { SimpleDateFormat("MMMM dd, yyyy", Locale.US).format(Date()) }
+    val cash = paymentMethods.firstOrNull { it.method.equals("Cash", ignoreCase = true) }?.totalSales ?: 0.0
+    val gcash = paymentMethods.firstOrNull { it.method.equals("GCash", ignoreCase = true) }?.totalSales ?: 0.0
+    val others = paymentMethods.filter {
+        !it.method.equals("Cash", ignoreCase = true) && !it.method.equals("GCash", ignoreCase = true)
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -342,13 +372,13 @@ private fun CupsDialog(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Set Cups Available",
+                            text = "Today's Sales Report",
                             style = MaterialTheme.typography.titleLarge,
                             color = TextWhite,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Select or enter the number of cups",
+                            text = dateText,
                             style = MaterialTheme.typography.bodySmall,
                             color = TextMuted,
                             modifier = Modifier.padding(top = 2.dp)
@@ -360,219 +390,246 @@ private fun CupsDialog(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(20.dp))
 
-                // Hot/Cold Tabs
-                TabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = Color(0xFF2A2A2A),
-                    contentColor = OrangeAccent,
-                    divider = {}
+                // Total Sales
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.LocalFireDepartment,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Hot", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal)
-                            }
-                        },
-                        selectedContentColor = OrangeAccent,
-                        unselectedContentColor = TextMuted
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.AcUnit,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Cold", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal)
-                            }
-                        },
-                        selectedContentColor = Color(0xFF2196F3),
-                        unselectedContentColor = TextMuted
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Current cups display
-                val currentCups = if (selectedTab == 0) currentHotCups else currentColdCups
-                val tabColor = if (selectedTab == 0) Color(0xFFFF9800) else Color(0xFF2196F3)
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = DarkCard,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = if (selectedTab == 0) Icons.Default.LocalFireDepartment else Icons.Default.AcUnit,
-                            contentDescription = null,
-                            tint = tabColor,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "Current: $currentCups cups",
-                            style = MaterialTheme.typography.titleMedium,
+                            text = "₱${String.format(Locale.US, "%,.2f", totalSales)}",
+                            style = MaterialTheme.typography.headlineMedium,
                             color = TextWhite,
                             fontWeight = FontWeight.Bold
                         )
+                        Text(
+                            text = "Total Sales Today",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Cash breakdown
+                PaymentBreakdownRow(
+                    icon = Icons.Default.Payments,
+                    color = StatusGreen,
+                    label = "Cash",
+                    amount = cash,
+                    total = totalSales
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // GCash breakdown
+                PaymentBreakdownRow(
+                    icon = Icons.Default.PhoneAndroid,
+                    color = Color(0xFF2196F3),
+                    label = "GCash",
+                    amount = gcash,
+                    total = totalSales
+                )
+
+                // Other payment methods (if any)
+                others.forEach { pm ->
+                    Spacer(modifier = Modifier.height(10.dp))
+                    PaymentBreakdownRow(
+                        icon = Icons.Default.MoreHoriz,
+                        color = Color(0xFF9C27B0),
+                        label = pm.method,
+                        amount = pm.totalSales,
+                        total = totalSales
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Close Button
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(
+                            text = "Close",
+                            color = OrangeAccent,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PaymentBreakdownRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: Color,
+    label: String,
+    amount: Double,
+    total: Double
+) {
+    val pct = if (total > 0) (amount / total * 100) else 0.0
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = DarkCard
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(color.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextMuted
+                )
+                Text(
+                    text = "₱${String.format(Locale.US, "%,.2f", amount)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextWhite,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Text(
+                text = "${String.format(Locale.US, "%.1f", pct)}%",
+                style = MaterialTheme.typography.bodyMedium,
+                color = color,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Cups Dialog (separate Hot / Cold inputs)
+// ════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun CupsDialog(
+    currentHotCups: Int,
+    currentColdCups: Int,
+    onHotCupsChanged: (Int) -> Unit,
+    onColdCupsChanged: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var cupOptions by remember { mutableStateOf(loadCupOptions(context)) }
+    var hotInput by remember { mutableStateOf("") }
+    var coldInput by remember { mutableStateOf("") }
+    var showAddNew by remember { mutableStateOf(false) }
+    var newOptionQuantity by remember { mutableStateOf("") }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .widthIn(min = 380.dp, max = 460.dp)
+                .heightIn(max = 700.dp)
+                .verticalScroll(rememberScrollState()),
+            shape = RoundedCornerShape(20.dp),
+            color = Color(0xFF1A1A1A),
+            tonalElevation = 0.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Set Cups Available",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = TextWhite,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Enter the number of hot and cold cups",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = TextGray, modifier = Modifier.size(20.dp))
                     }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Predefined options
-                Text(
-                    text = "QUICK SELECT",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextMuted,
-                    letterSpacing = 1.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    cupOptions.chunked(2).forEach { row ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            row.forEach { option ->
-                                val quantity = option.quantity
-                                val isSelected = currentCups == quantity
-                                Surface(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isSelected) tabColor.copy(alpha = 0.12f) else Color.Transparent)
-                                        .clickable {
-                                            if (selectedTab == 0) onHotCupSelected(quantity) else onColdCupSelected(quantity)
-                                        }
-                                        .padding(12.dp),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(tabColor.copy(alpha = 0.15f)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                imageVector = option.icon,
-                                                contentDescription = null,
-                                                tint = tabColor,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Column {
-                                            Text(
-                                                text = "${quantity}",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = TextWhite,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "cups",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = TextMuted
-                                            )
-                                        }
-                                        if (isSelected) {
-                                            Spacer(modifier = Modifier.weight(1f))
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = null,
-                                                tint = tabColor,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            // Fill empty space if odd number
-                            if (row.size < 2) {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
+                // ── Hot Cups Section ──
+                CupAmountSection(
+                    title = "HOT CUPS",
+                    icon = Icons.Default.LocalFireDepartment,
+                    color = Color(0xFFFF9800),
+                    current = currentHotCups,
+                    options = cupOptions,
+                    input = hotInput,
+                    onInputChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) hotInput = it },
+                    onQuickSelect = { count -> onHotCupsChanged(count) },
+                    onSet = {
+                        val count = hotInput.toIntOrNull() ?: 0
+                        if (count > 0) {
+                            onHotCupsChanged(count)
+                            hotInput = ""
                         }
                     }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-                HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Custom input
-                Text(
-                    text = "CUSTOM AMOUNT",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextMuted,
-                    letterSpacing = 1.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = customInput,
-                        onValueChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) customInput = it },
-                        placeholder = { Text("Enter number", color = InputPlaceholder) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp),
-                        singleLine = true,
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
-                        ),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = tabColor,
-                            unfocusedBorderColor = InputBorder,
-                            cursorColor = tabColor,
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite
-                        )
-                    )
-                    Button(
-                        onClick = {
-                            val count = customInput.toIntOrNull() ?: 0
-                            if (count > 0) {
-                                if (selectedTab == 0) onHotCupSelected(count) else onColdCupSelected(count)
-                            }
-                        },
-                        modifier = Modifier.height(48.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = tabColor,
-                            contentColor = TextWhite
-                        ),
-                        enabled = customInput.toIntOrNull()?.let { it > 0 } == true
-                    ) {
-                        Text("Set", fontWeight = FontWeight.Bold)
-                    }
-                }
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(16.dp))
 
-                Spacer(modifier = Modifier.height(12.dp))
+                // ── Cold Cups Section ──
+                CupAmountSection(
+                    title = "COLD CUPS",
+                    icon = Icons.Default.AcUnit,
+                    color = Color(0xFF2196F3),
+                    current = currentColdCups,
+                    options = cupOptions,
+                    input = coldInput,
+                    onInputChange = { if (it.isEmpty() || it.all { c -> c.isDigit() }) coldInput = it },
+                    onQuickSelect = { count -> onColdCupsChanged(count) },
+                    onSet = {
+                        val count = coldInput.toIntOrNull() ?: 0
+                        if (count > 0) {
+                            onColdCupsChanged(count)
+                            coldInput = ""
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Add New Option
                 if (!showAddNew) {
@@ -653,7 +710,7 @@ private fun CupsDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Close button
+                // Done button
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center
@@ -667,6 +724,157 @@ private fun CupsDialog(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Cup Amount Section (shared by Hot / Cold)
+// ════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun CupAmountSection(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: Color,
+    current: Int,
+    options: List<CupSizeOption>,
+    input: String,
+    onInputChange: (String) -> Unit,
+    onQuickSelect: (Int) -> Unit,
+    onSet: () -> Unit
+) {
+    Column {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = color,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = TextWhite,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+            }
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = color.copy(alpha = 0.15f)
+            ) {
+                Text(
+                    text = "Current: $current cups",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = color,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Quick select options
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            options.chunked(4).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    row.forEach { option ->
+                        val isSelected = current == option.quantity
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSelected) color.copy(alpha = 0.12f) else Color.Transparent)
+                                .clickable { onQuickSelect(option.quantity) }
+                                .padding(vertical = 10.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "${option.quantity}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = TextWhite,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "cups",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextMuted
+                                )
+                                if (isSelected) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = color,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    repeat(4 - row.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Custom input + Set
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = input,
+                onValueChange = onInputChange,
+                placeholder = { Text("Custom amount", color = InputPlaceholder) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(10.dp),
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                ),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = color,
+                    unfocusedBorderColor = InputBorder,
+                    cursorColor = color,
+                    focusedTextColor = TextWhite,
+                    unfocusedTextColor = TextWhite
+                )
+            )
+            Button(
+                onClick = onSet,
+                modifier = Modifier.height(48.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = color,
+                    contentColor = TextWhite
+                ),
+                enabled = input.toIntOrNull()?.let { it > 0 } == true
+            ) {
+                Text("Set", fontWeight = FontWeight.Bold)
             }
         }
     }

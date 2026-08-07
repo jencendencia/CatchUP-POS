@@ -29,6 +29,9 @@ import com.catchuppos.app.auth.AuthState
 import com.catchuppos.app.data.UserEntity
 import com.catchuppos.app.data.UserRole
 import com.catchuppos.app.theme.*
+import com.catchuppos.app.update.UpdateChecker
+import com.catchuppos.app.update.UpdateInfo
+import com.catchuppos.app.ui.update.UpdateDialog
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -52,6 +55,8 @@ fun SettingsScreen(
     var showDeleteConfirmation by remember { mutableStateOf<UserEntity?>(null) }
     var showRestoreConfirmation by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var checkingUpdate by remember { mutableStateOf(false) }
 
     // Backup launcher
     val backupLauncher = rememberLauncherForActivityResult(
@@ -95,6 +100,19 @@ fun SettingsScreen(
     // Load users
     LaunchedEffect(Unit) {
         users = userRepository.getAllUsersOnce()
+    }
+
+    fun checkForUpdate() {
+        scope.launch {
+            checkingUpdate = true
+            val update = UpdateChecker.checkForUpdate(context)
+            checkingUpdate = false
+            if (update != null) {
+                updateInfo = update
+            } else {
+                Toast.makeText(context, "You're up to date", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     Column(
@@ -253,6 +271,78 @@ fun SettingsScreen(
                     app = app,
                     isAdmin = AuthState.isAdmin
                 )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // ── App Updates Section ──
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
+                Text(
+                    text = "APP UPDATES",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextMuted,
+                    letterSpacing = 1.5.sp,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { checkForUpdate() },
+                            enabled = !checkingUpdate,
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = Color(0xFF1A1A1A),
+                                contentColor = TextWhite,
+                                disabledContainerColor = Color(0xFF1A1A1A),
+                                disabledContentColor = TextMuted
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SystemUpdate,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp),
+                                tint = Color(0xFF2196F3)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (checkingUpdate) "Checking for Updates..." else "Check for Updates",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Check if a new version is available",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextMuted
+                                )
+                            }
+                            if (checkingUpdate) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color(0xFF2196F3)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
@@ -443,6 +533,14 @@ fun SettingsScreen(
                     Text("Cancel", color = TextMuted)
                 }
             }
+        )
+    }
+
+    // Update Dialog
+    if (updateInfo != null) {
+        UpdateDialog(
+            updateInfo = updateInfo!!,
+            onDismiss = { updateInfo = null }
         )
     }
 

@@ -315,31 +315,6 @@ fun OrdersScreen(
                                     Spacer(modifier = Modifier.height(20.dp))
                                 }
 
-                                // Global Rules Banner
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = DarkCard
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Info,
-                                            contentDescription = null,
-                                            tint = TextMuted,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Text(
-                                            text = "All drinks are 12oz.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = TextGray
-                                        )
-                                    }
-                                }
-
                                 Spacer(modifier = Modifier.height(16.dp))
                             }
                         }
