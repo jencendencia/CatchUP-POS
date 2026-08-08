@@ -1,5 +1,6 @@
 package com.catchuppos.app.navigation
 
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
@@ -20,7 +21,14 @@ object Routes {
 @Composable
 fun CatchUpNavGraph(navController: NavHostController) {
     val context = LocalContext.current
-    val isActivated = LicenseManager.isActivated(context)
+    // Never let a license-check failure (e.g. broken keystore / encrypted prefs) crash the
+    // app on launch. Worst case the user is sent to the activation screen to re-enter their key.
+    val isActivated = try {
+        LicenseManager.isActivated(context)
+    } catch (e: Exception) {
+        Log.w("CatchUpNavGraph", "License check failed, showing activation: ${e.message}")
+        false
+    }
     val startDestination = if (isActivated) Routes.LOGIN else Routes.ACTIVATION
 
     NavHost(

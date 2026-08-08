@@ -28,12 +28,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
 import com.catchuppos.app.CatchUpApp
 import com.catchuppos.app.data.*
 import com.catchuppos.app.theme.*
+import com.catchuppos.app.util.PdfExportHelper
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // ════════════════════════════════════════════════════════════════════
 // Sub-tab definitions
@@ -46,6 +50,12 @@ enum class ReportSubTab(val label: String) {
     PRODUCTS("Products"),
     EMPLOYEES("Employees"),
     TAXES("Taxes")
+}
+
+// Granularity options for the Sales Overview chart dropdown
+enum class SalesGranularity(val label: String) {
+    HOURLY("By Hour"),
+    DAILY("By Day")
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -372,6 +382,7 @@ fun ReportsScreen(
     val app = context.applicationContext as CatchUpApp
     val repository = app.productRepository
     val userRepo = app.userRepository
+    val scope = rememberCoroutineScope()
 
     val dateFormat = remember { SimpleDateFormat("MMMM dd, yyyy", Locale.US) }
 
@@ -389,6 +400,7 @@ fun ReportsScreen(
     var topProducts by remember { mutableStateOf<List<TopSellingProduct>>(emptyList()) }
     var paymentMethods by remember { mutableStateOf<List<PaymentMethodSales>>(emptyList()) }
     var recentTransactions by remember { mutableStateOf<List<TransactionEntity>>(emptyList()) }
+    var salesGranularity by remember { mutableStateOf(SalesGranularity.HOURLY) }
 
     // State for other tabs
     var dailySales by remember { mutableStateOf<List<DailySalesSummary>>(emptyList()) }
@@ -448,7 +460,35 @@ fun ReportsScreen(
             activeTab = activeSubTab,
             onTabSelected = { activeSubTab = it },
             selectedDateLabel = selectedDateLabel,
-            onDateClick = { showDatePicker = true }
+            onDateClick = { showDatePicker = true },
+            onExportClick = {
+                scope.launch {
+                    try {
+                        val fileName = "SalesReport_${SimpleDateFormat("yyyy-MM-dd_HHmm", Locale.US).format(Date())}.pdf"
+                        val bytes = withContext(Dispatchers.IO) {
+                            PdfExportHelper.buildReportPdf(
+                                rangeLabel = selectedDateLabel,
+                                totalSales = kpiData.totalSales,
+                                totalOrders = kpiData.totalOrders,
+                                avgOrderValue = kpiData.avgOrderValue,
+                                totalItemsSold = kpiData.totalItemsSold,
+                                grossProfit = kpiData.grossProfit,
+                                hourlySales = hourlySales,
+                                dailySales = dailySales,
+                                paymentMethods = paymentMethods,
+                                topProducts = topProducts,
+                                recentTransactions = recentTransactions,
+                                orderStatusCounts = orderStatusCounts,
+                                categorySales = categorySales,
+                                cashierPerformance = cashierPerformance
+                            )
+                        }
+                        PdfExportHelper.sharePdf(context, fileName, bytes)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
         )
         Spacer(modifier = Modifier.height(20.dp))
 
@@ -457,6 +497,9 @@ fun ReportsScreen(
             ReportSubTab.OVERVIEW -> OverviewContent(
                 kpiData = kpiData,
                 hourlySales = hourlySales,
+                dailySales = dailySales,
+                salesGranularity = salesGranularity,
+                onGranularityChange = { salesGranularity = it },
                 categorySales = categorySales,
                 topProducts = topProducts,
                 paymentMethods = paymentMethods,
@@ -664,7 +707,8 @@ private fun SubTabAndFilterRow(
     activeTab: ReportSubTab,
     onTabSelected: (ReportSubTab) -> Unit,
     selectedDateLabel: String,
-    onDateClick: () -> Unit
+    onDateClick: () -> Unit,
+    onExportClick: () -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -724,6 +768,19 @@ private fun SubTabAndFilterRow(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Filter", style = MaterialTheme.typography.bodySmall)
             }
+
+            OutlinedButton(
+                onClick = onExportClick,
+                shape = RoundedCornerShape(10.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, OrangeAccent),
+                colors = ButtonDefaults.outlinedButtonColors(containerColor = DarkCard, contentColor = OrangeAccent),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                modifier = Modifier.height(38.dp)
+            ) {
+                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Export PDF", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }
@@ -736,6 +793,9 @@ private fun SubTabAndFilterRow(
 private fun OverviewContent(
     kpiData: KPIData,
     hourlySales: List<HourlySalesSummary>,
+    dailySales: List<DailySalesSummary>,
+    salesGranularity: SalesGranularity,
+    onGranularityChange: (SalesGranularity) -> Unit,
     categorySales: List<CategorySalesSummary>,
     topProducts: List<TopSellingProduct>,
     paymentMethods: List<PaymentMethodSales>,
@@ -810,13 +870,56 @@ private fun OverviewContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("SALES OVERVIEW", style = MaterialTheme.typography.labelSmall, color = TextMuted, letterSpacing = 1.sp)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("By Hour", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = TextMuted, modifier = Modifier.size(16.dp))
+                    // Granularity selector (By Hour / By Day)
+                    var granularityExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { granularityExpanded = true }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(salesGranularity.label, style = MaterialTheme.typography.bodySmall, color = TextMuted)
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = TextMuted, modifier = Modifier.size(16.dp))
+                        }
+                        DropdownMenu(
+                            expanded = granularityExpanded,
+                            onDismissRequest = { granularityExpanded = false }
+                        ) {
+                            SalesGranularity.entries.forEach { granularity ->
+                                val isSelected = granularity == salesGranularity
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            granularity.label,
+                                            color = if (isSelected) OrangeAccent else TextWhite,
+                                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                        )
+                                    },
+                                    onClick = {
+                                        onGranularityChange(granularity)
+                                        granularityExpanded = false
+                                    },
+                                    leadingIcon = if (isSelected) {
+                                        { Icon(Icons.Default.Check, contentDescription = null, tint = OrangeAccent, modifier = Modifier.size(16.dp)) }
+                                    } else null
+                                )
+                            }
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                SalesLineChart(hourlySales = hourlySales, modifier = Modifier.fillMaxWidth().height(220.dp))
+                when (salesGranularity) {
+                    SalesGranularity.HOURLY -> SalesLineChart(
+                        hourlySales = hourlySales,
+                        modifier = Modifier.fillMaxWidth().height(220.dp)
+                    )
+                    SalesGranularity.DAILY -> DailySalesBarChart(
+                        dailySales = dailySales,
+                        modifier = Modifier.fillMaxWidth().height(220.dp)
+                    )
+                }
             }
         }
 
@@ -967,7 +1070,8 @@ private fun SalesLineChart(
     val textColor = TextGray
 
     val hourLabels = listOf("12 AM", "4 AM", "8 AM", "12 PM", "4 PM", "8 PM", "11 PM")
-    val hourPositions = listOf(0, 4, 8, 12, 16, 20, 23)
+    val labelHours = listOf(0, 4, 8, 12, 16, 20, 23)
+    val allHours = 0..23
     val salesMap = hourlySales.associate { it.hour to it.amount }
     val maxSales = maxOf(hourlySales.maxOfOrNull { it.amount } ?: 1.0, 1.0)
 
@@ -986,17 +1090,28 @@ private fun SalesLineChart(
             val labelValue = (maxSales * i / gridSteps).toInt()
             yAxisPaint.color = textColor.hashCode()
             drawContext.canvas.nativeCanvas.drawText(
-                "₱${labelValue / 1000}K", -36f, y + 4f, yAxisPaint
+                formatSalesLabel(labelValue), -36f, y + 4f, yAxisPaint
             )
         }
 
-        val points = hourPositions.map { hour ->
+        // Plot every hour of the day (0–23) using the exact same hourly sales
+        // data shown in the hourly breakdown table, so the line matches the numbers.
+        val points = allHours.map { hour ->
             val x = chartWidth * hour / 23f
             val y = baseline - (chartHeight * (salesMap[hour] ?: 0.0) / maxSales).toFloat()
             Offset(x, y)
         }
 
         if (points.isNotEmpty()) {
+            // Filled area under the line
+            val fillPath = Path().apply {
+                moveTo(points.first().x, baseline)
+                points.forEach { lineTo(it.x, it.y) }
+                lineTo(points.last().x, baseline)
+                close()
+            }
+            drawPath(fillPath, lineColor.copy(alpha = 0.1f))
+
             val path = Path().apply {
                 moveTo(points[0].x, points[0].y)
                 for (i in 1 until points.size) lineTo(points[i].x, points[i].y)
@@ -1008,7 +1123,7 @@ private fun SalesLineChart(
                 drawCircle(Color(0xFF0D0D0D), radius = 2f, center = pt)
             }
 
-            hourPositions.forEachIndexed { index, hour ->
+            labelHours.forEachIndexed { index, hour ->
                 val x = chartWidth * hour / 23f
                 xAxisPaint.color = textColor.hashCode()
                 drawContext.canvas.nativeCanvas.drawText(
@@ -1016,6 +1131,20 @@ private fun SalesLineChart(
                 )
             }
         }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Sales Y-axis label helper (shows full ₱ amounts, or K for large values)
+// ════════════════════════════════════════════════════════════════════
+
+private fun formatSalesLabel(value: Int): String {
+    return if (value >= 1000) {
+        val k = value / 1000.0
+        val formatted = if (k % 1.0 == 0.0) "${k.toInt()}K" else String.format(Locale.US, "%.1fK", k)
+        "₱$formatted"
+    } else {
+        "₱$value"
     }
 }
 

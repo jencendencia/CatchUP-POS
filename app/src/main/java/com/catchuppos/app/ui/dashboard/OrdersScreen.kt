@@ -147,7 +147,7 @@ fun OrdersScreen(
     val repository = app.productRepository
     val scope = rememberCoroutineScope()
 
-    var drinkProducts by remember { mutableStateOf<List<ProductEntity>>(emptyList()) }
+    var catalogProducts by remember { mutableStateOf<List<ProductEntity>>(emptyList()) }
     var cartItems by remember { mutableStateOf<List<CartItem>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedProduct by remember { mutableStateOf<ProductEntity?>(null) }
@@ -184,7 +184,8 @@ fun OrdersScreen(
     // Load drink products, categories, and held orders from DB
     LaunchedEffect(Unit) {
         val allProducts = repository.allProductsOnce()
-        drinkProducts = allProducts.filter { it.type == "DRINK" && it.isActive }
+        // List every active product (drinks AND food) so newly added products always show up
+        catalogProducts = allProducts.filter { it.isActive }
         dbCategories = repository.allCategoriesOnce()
         heldOrders = loadHeldOrders(context, allProducts)
         cupsAvailable = loadCupCount(context, "hot") + loadCupCount(context, "cold")
@@ -193,8 +194,8 @@ fun OrdersScreen(
     }
 
     // Filtered products
-    val filteredProducts = remember(searchQuery, drinkProducts, selectedCategoryFilter) {
-        drinkProducts.filter { prod ->
+    val filteredProducts = remember(searchQuery, catalogProducts, selectedCategoryFilter) {
+        catalogProducts.filter { prod ->
             val searchMatch = searchQuery.isBlank() ||
                 prod.title.contains(searchQuery, ignoreCase = true) ||
                 (prod.description?.contains(searchQuery, ignoreCase = true) == true)
@@ -203,9 +204,9 @@ fun OrdersScreen(
         }
     }
 
-    // Group by category
+    // Group by category in fixed display order (Coffee → Non Coffee → Food → Add-Ons)
     val categorizedProducts = remember(filteredProducts) {
-        filteredProducts.groupBy { it.category }
+        orderCatalogSections(filteredProducts.groupBy { it.category })
     }
 
     // Cart totals
@@ -290,7 +291,7 @@ fun OrdersScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = if (searchQuery.isNotBlank()) "No drinks found."
+                                    text = if (searchQuery.isNotBlank()) "No products found."
                                     else "No products available.",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = TextMuted
@@ -306,7 +307,7 @@ fun OrdersScreen(
                                 Spacer(modifier = Modifier.height(20.dp))
 
                                 categorizedProducts.forEach { (category, products) ->
-                                    val sectionTitle = if (category == "Coffee") "COFFEE DRINKS" else "NON COFFEE DRINKS"
+                                    val sectionTitle = sectionTitleFor(category)
                                     CategorySection(
                                         title = sectionTitle,
                                         products = products,
@@ -390,7 +391,7 @@ fun OrdersScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = if (searchQuery.isNotBlank()) "No drinks found."
+                                    text = if (searchQuery.isNotBlank()) "No products found."
                                     else "No products available.",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = TextMuted
@@ -406,7 +407,7 @@ fun OrdersScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
 
                                 categorizedProducts.forEach { (category, products) ->
-                                    val sectionTitle = if (category == "Coffee") "COFFEE DRINKS" else "NON COFFEE DRINKS"
+                                    val sectionTitle = sectionTitleFor(category)
                                     CategorySection(
                                         title = sectionTitle,
                                         products = products,
@@ -511,8 +512,8 @@ fun OrdersScreen(
                     }
                     repository.insertOrderItems(orderItems)
 
-                    // Deduct cups per item based on product temperature
-                    cartItems.filter { it.product.type == "DRINK" }.forEach { item ->
+                    // Deduct cups only for actual drinks (Add-Ons & Merchandise don't consume cups)
+                    cartItems.filter { it.product.isRealDrink() }.forEach { item ->
                         if (item.product.temperature == "HOT" && hotCupsAvailable > 0) {
                             hotCupsAvailable = maxOf(0, hotCupsAvailable - item.quantity)
                         } else if (item.product.temperature == "COLD" && coldCupsAvailable > 0) {
@@ -1219,6 +1220,43 @@ private fun CategoriesDialog(
     }
 }
 
+// ── Catalog section ordering (All Items view) ──
+
+private val catalogSectionOrder = listOf("Coffee", "Non Coffee", "Food", "Add-Ons")
+
+// ── Real drink check (Add-Ons, Merchandise and legacy "All" are not drinks) ──
+
+private val nonDrinkCategories = setOf("Add-Ons", "Merchandise", "All")
+
+private fun ProductEntity.isRealDrink(): Boolean =
+    type == "DRINK" && category !in nonDrinkCategories
+
+private fun orderCatalogSections(
+    grouped: Map<String, List<ProductEntity>>
+): List<Pair<String, List<ProductEntity>>> {
+    val ordered = mutableListOf<Pair<String, List<ProductEntity>>>()
+    catalogSectionOrder.forEach { cat ->
+        grouped[cat]?.let { ordered.add(cat to it) }
+    }
+    // Any remaining categories (Merchandise, legacy "All", custom) follow the known ones
+    grouped.forEach { (cat, prods) ->
+        if (cat !in catalogSectionOrder) ordered.add(cat to prods)
+    }
+    return ordered
+}
+
+// ── Section title helper ──
+
+private fun sectionTitleFor(category: String): String {
+    return when (category) {
+        "Coffee" -> "COFFEE DRINKS"
+        "Non Coffee" -> "NON COFFEE DRINKS"
+        // Legacy products saved under the buggy "All" category
+        "All" -> "ADD-ONS & OTHERS"
+        else -> category.uppercase()
+    }
+}
+
 // ── Utility to parse hex color string ──
 
 private fun parseColor(hex: String): Color {
@@ -1526,9 +1564,8 @@ private fun ItemCustomizationSheet(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Category
-                val categoryLabel = if (product.category == "Coffee") "Coffee Drinks" else "Non Coffee Drinks"
                 Text(
-                    text = categoryLabel,
+                    text = product.category,
                     style = MaterialTheme.typography.bodyMedium,
                     color = OrangeMuted,
                     fontWeight = FontWeight.Medium
@@ -1638,66 +1675,68 @@ private fun ItemCustomizationSheet(
         HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
         Spacer(modifier = Modifier.height(20.dp))
 
-        // ── Sugar Level ──
-        Text(
-            text = "⚗️ SUGAR LEVEL",
-            style = MaterialTheme.typography.labelLarge,
-            color = TextWhite,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.sp,
-            modifier = Modifier.padding(bottom = 10.dp)
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            sugarOptions.forEach { option ->
-                val isSelected = option == sugarLevel
-                Surface(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { sugarLevel = option },
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isSelected) OrangeAccent else DarkCard,
-                    border = if (isSelected) null else BorderStroke(1.dp, DarkBorder)
-                ) {
-                    Text(
-                        text = if (isSelected) "$option ✔" else option,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (isSelected) TextWhite else TextMuted,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                    )
+        // ── Sugar Level (real drinks only — hidden for add-ons & merchandise) ──
+        if (product.isRealDrink()) {
+            Text(
+                text = "⚗️ SUGAR LEVEL",
+                style = MaterialTheme.typography.labelLarge,
+                color = TextWhite,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                sugarOptions.forEach { option ->
+                    val isSelected = option == sugarLevel
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { sugarLevel = option },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSelected) OrangeAccent else DarkCard,
+                        border = if (isSelected) null else BorderStroke(1.dp, DarkBorder)
+                    ) {
+                        Text(
+                            text = if (isSelected) "$option ✔" else option,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (isSelected) TextWhite else TextMuted,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // ── Ice Level ──
-        Text(
-            text = "❄️ ICE LEVEL",
-            style = MaterialTheme.typography.labelLarge,
-            color = TextWhite,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.sp,
-            modifier = Modifier.padding(bottom = 10.dp)
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            iceOptions.forEach { option ->
-                val isSelected = option == iceLevel
-                Surface(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { iceLevel = option },
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isSelected) OrangeAccent else DarkCard,
-                    border = if (isSelected) null else BorderStroke(1.dp, DarkBorder)
-                ) {
-                    Text(
-                        text = if (isSelected) "$option ✔" else option,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (isSelected) TextWhite else TextMuted,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                    )
+    
+            Spacer(modifier = Modifier.height(20.dp))
+    
+            // ── Ice Level ──
+            Text(
+                text = "❄️ ICE LEVEL",
+                style = MaterialTheme.typography.labelLarge,
+                color = TextWhite,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                iceOptions.forEach { option ->
+                    val isSelected = option == iceLevel
+                    Surface(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { iceLevel = option },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSelected) OrangeAccent else DarkCard,
+                        border = if (isSelected) null else BorderStroke(1.dp, DarkBorder)
+                    ) {
+                        Text(
+                            text = if (isSelected) "$option ✔" else option,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (isSelected) TextWhite else TextMuted,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
                 }
             }
         }
@@ -1868,7 +1907,9 @@ private fun CartLineItem(
             )
             // Customization details
             Text(
-                text = "${item.size} • ${item.sugarLevel} Sugar • ${item.iceLevel}",
+                text = if (item.product.isRealDrink())
+                    "${item.size} • ${item.sugarLevel} Sugar • ${item.iceLevel}"
+                else item.size,
                 style = MaterialTheme.typography.bodySmall,
                 color = TextGray,
                 maxLines = 1,

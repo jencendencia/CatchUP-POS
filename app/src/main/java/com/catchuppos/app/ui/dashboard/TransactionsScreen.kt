@@ -21,11 +21,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import android.widget.Toast
 import com.catchuppos.app.CatchUpApp
 import com.catchuppos.app.data.OrderItemEntity
 import com.catchuppos.app.data.TransactionEntity
 import com.catchuppos.app.theme.*
+import com.catchuppos.app.util.PdfExportHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -151,7 +155,27 @@ fun TransactionsScreen() {
             Spacer(modifier = Modifier.weight(1f))
 
             OutlinedButton(
-                onClick = { /* Export logic */ },
+                onClick = {
+                    scope.launch {
+                        try {
+                            val fileName = "Transactions_${SimpleDateFormat("yyyy-MM-dd_HHmm", Locale.US).format(Date())}.pdf"
+                            val bytes = withContext(Dispatchers.IO) {
+                                PdfExportHelper.buildTransactionsPdf(
+                                    rangeLabel = selectedDateLabel,
+                                    transactions = filteredTransactions,
+                                    totalOrders = totalOrders,
+                                    totalSales = totalSales,
+                                    totalCash = totalCash,
+                                    totalGcash = totalGcash,
+                                    totalItems = totalItemsSold
+                                )
+                            }
+                            PdfExportHelper.sharePdf(context, fileName, bytes)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
                 modifier = Modifier.height(44.dp),
                 shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.dp, OrangeAccent),
@@ -167,7 +191,7 @@ fun TransactionsScreen() {
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "Export",
+                    text = "Export PDF",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold
                 )

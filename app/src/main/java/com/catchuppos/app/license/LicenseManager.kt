@@ -1,7 +1,9 @@
 package com.catchuppos.app.license
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.provider.Settings
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import kotlinx.coroutines.Dispatchers
@@ -26,13 +28,25 @@ object LicenseManager {
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
-    private fun getEncryptedPrefs(context: Context) = EncryptedSharedPreferences.create(
-        PREFS_NAME,
-        MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
-        context,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private fun getEncryptedPrefs(context: Context): SharedPreferences {
+        return try {
+            EncryptedSharedPreferences.create(
+                PREFS_NAME,
+                MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
+                context,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            // The Android Keystore / encrypted prefs can fail on some devices, after an OS
+            // update, or when app data is restored onto a new device. isActivated() is called
+            // on every launch, so an unhandled exception here crashes the app as soon as it
+            // opens. Fall back to plain prefs so the app always starts; the user can simply
+            // re-enter their license key if the stored activation can't be read.
+            Log.w("LicenseManager", "Encrypted prefs unavailable, falling back to plain prefs: ${e.message}")
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }
+    }
 
     fun isActivated(context: Context): Boolean {
         val prefs = getEncryptedPrefs(context)

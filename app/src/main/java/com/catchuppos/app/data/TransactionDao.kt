@@ -60,7 +60,7 @@ interface TransactionDao {
     suspend fun getItemsSoldByDateRange(startTime: Long, endTime: Long): Int?
 
     @Query("""
-        SELECT (CAST(strftime('%H', created_at / 1000, 'unixepoch') AS INTEGER)) as hour, SUM(total) as amount
+        SELECT (CAST(strftime('%H', created_at / 1000, 'unixepoch', 'localtime') AS INTEGER)) as hour, SUM(total) as amount
         FROM transactions
         WHERE created_at BETWEEN :startTime AND :endTime
         GROUP BY hour

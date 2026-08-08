@@ -65,6 +65,13 @@ class ProductRepository(
 
     // ── Seeding ──
 
+    /**
+     * One-time repair (runs every launch, idempotent): Add-Ons / Merchandise / legacy "All"
+     * products stored with type FOOD get corrected to DRINK so they never appear under the
+     * Food section in the Products page.
+     */
+    suspend fun repairProductCategoryTypes() = productDao.fixNonDrinkCategoryTypes()
+
     suspend fun seedSampleData() {
         // Seed categories
         if (categoryDao.getCategoryCount() == 0) {

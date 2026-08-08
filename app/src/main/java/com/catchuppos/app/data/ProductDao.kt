@@ -57,4 +57,11 @@ interface ProductDao {
 
     @Query("SELECT COALESCE(SUM(quantity), 0) FROM products WHERE type = 'DRINK'")
     suspend fun getTotalCupsAvailable(): Int
+
+    /**
+     * Repair: Add-Ons / Merchandise products (and legacy "All") must never be stored as
+     * type FOOD, otherwise they show up under the Food section in the Products page.
+     */
+    @Query("UPDATE products SET type = 'DRINK' WHERE type = 'FOOD' AND category IN ('Add-Ons', 'Merchandise', 'All')")
+    suspend fun fixNonDrinkCategoryTypes()
 }

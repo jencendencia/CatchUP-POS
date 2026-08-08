@@ -65,7 +65,9 @@ enum class ProductCategory(val displayName: String) {
     ALL("All"),
     COFFEE("Coffee"),
     NON_COFFEE("Non Coffee"),
-    FOOD("Food")
+    FOOD("Food"),
+    ADD_ONS("Add-Ons"),
+    MERCHANDISE("Merchandise")
 }
 
 data class Product(
@@ -82,19 +84,39 @@ data class Product(
 
 enum class ProductSection(val displayName: String) {
     DRINKS("DRINKS"),
-    FOOD("FOOD")
+    FOOD("FOOD"),
+    ADD_ONS("ADD-ONS"),
+    MERCHANDISE("MERCHANDISE")
 }
+
+// Categories that are never drinks (Add-Ons, Merchandise, and legacy "All")
+private val nonDrinkLikeCategories = setOf("Add-Ons", "Merchandise", "All")
+
+// Fixed display order for the All-products grid sections
+private val catalogSectionOrder = listOf(
+    ProductSection.DRINKS,
+    ProductSection.FOOD,
+    ProductSection.ADD_ONS,
+    ProductSection.MERCHANDISE
+)
 
 // --- Mapper ---
 
 private fun ProductEntity.toUiProduct(): Product {
-    val category = when (category) {
+    // `rawCategory` is the entity's stored String; `uiCategory` is the enum (avoid shadowing)
+    val uiCategory = when (val rawCategory = category) {
         "Coffee" -> ProductCategory.COFFEE
         "Non Coffee" -> ProductCategory.NON_COFFEE
+        "Add-Ons" -> ProductCategory.ADD_ONS
+        "Merchandise" -> ProductCategory.MERCHANDISE
+        "All" -> ProductCategory.ADD_ONS // legacy products saved under the buggy "All" category
         else -> ProductCategory.FOOD
     }
-    val section = when (type) {
-        "FOOD" -> ProductSection.FOOD
+    // Sections come from the stored category — Add-Ons & Merchandise get their own headers
+    val section = when (category) {
+        "Food" -> ProductSection.FOOD
+        "Add-Ons", "All" -> ProductSection.ADD_ONS
+        "Merchandise" -> ProductSection.MERCHANDISE
         else -> ProductSection.DRINKS
     }
     return Product(
@@ -102,7 +124,7 @@ private fun ProductEntity.toUiProduct(): Product {
         title = title,
         description = description,
         price = sellingPrice,
-        category = category,
+        category = uiCategory,
         isActive = isActive,
         section = section,
         imagePath = imagePath
@@ -318,8 +340,13 @@ fun ProductsScreen(
                     ) {
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // Group products by section
+                        // Group products by section in fixed display order (DRINKS, FOOD, ADD-ONS, MERCHANDISE)
                         val sections = pagedProducts.groupBy { it.section }
+                            .toList()
+                            .sortedBy { (section, _) ->
+                                val idx = catalogSectionOrder.indexOf(section)
+                                if (idx == -1) catalogSectionOrder.size else idx
+                            }
                         sections.forEach { (section, products) ->
                             // Section Header
                             Text(
@@ -794,7 +821,9 @@ private fun generateVisiblePages(currentPage: Int, totalPages: Int): List<Int> {
 private val categoryDisplayMap = mapOf(
     ProductCategory.COFFEE to Triple(Color(0xFF6D4C41), "☕", "Manage all coffee products"),
     ProductCategory.NON_COFFEE to Triple(Color(0xFFF48FB1), "🧋", "Manage all non coffee products"),
-    ProductCategory.FOOD to Triple(Color(0xFFFF6600), "🛎️", "Manage all food products")
+    ProductCategory.FOOD to Triple(Color(0xFFFF6600), "🛎️", "Manage all food products"),
+    ProductCategory.ADD_ONS to Triple(Color(0xFF9C27B0), "+", "Manage add-on products"),
+    ProductCategory.MERCHANDISE to Triple(Color(0xFF388E3C), "🛍️", "Manage merchandise products")
 )
 
 private fun getCategoryDisplayName(category: ProductCategory): String = category.displayName.lowercase()
@@ -1360,8 +1389,8 @@ private val categoryOptions = listOf(
     CategoryOption("Coffee", ProductCategory.COFFEE, Color(0xFF6D4C41), "☕", ProductType.DRINK),
     CategoryOption("Non Coffee", ProductCategory.NON_COFFEE, Color(0xFFF48FB1), "🧋", ProductType.DRINK),
     CategoryOption("Food", ProductCategory.FOOD, Color(0xFFFF6600), "🛎️", ProductType.FOOD),
-    CategoryOption("Add-Ons", ProductCategory.ALL, Color(0xFF9C27B0), "+", ProductType.DRINK),
-    CategoryOption("Merchandise", ProductCategory.ALL, Color(0xFF388E3C), "🛍️", ProductType.DRINK)
+    CategoryOption("Add-Ons", ProductCategory.ADD_ONS, Color(0xFF9C27B0), "+", ProductType.DRINK),
+    CategoryOption("Merchandise", ProductCategory.MERCHANDISE, Color(0xFF388E3C), "🛍️", ProductType.DRINK)
 )
 
 @Composable
@@ -2132,14 +2161,20 @@ private fun AddProductScreen(
     val initialCategory = when (editingProduct?.category) {
         "Coffee" -> ProductCategory.COFFEE
         "Non Coffee" -> ProductCategory.NON_COFFEE
+        "Add-Ons" -> ProductCategory.ADD_ONS
+        "Merchandise" -> ProductCategory.MERCHANDISE
+        "All" -> ProductCategory.ADD_ONS // legacy products saved under the buggy "All" category
         else -> ProductCategory.FOOD
     }
-    val initialType = if (editingProduct?.type == "FOOD") ProductType.FOOD else ProductType.DRINK
+    // Add-Ons & Merchandise products are never Food-type, even if old data says otherwise
+    val initialType = if (editingProduct?.type == "FOOD" && editingProduct?.category !in nonDrinkLikeCategories) ProductType.FOOD else ProductType.DRINK
 
     // ── Form State (keyed by editingProduct to reset when switching products) ──
     var productName by remember(editingProduct) { mutableStateOf(editingProduct?.title ?: "") }
     var selectedCategory by remember(editingProduct) { mutableStateOf(initialCategory) }
     var productType by remember(editingProduct) { mutableStateOf(initialType) }
+    // Add-Ons & Merchandise are not drinks — their drink-specific fields stay hidden
+    val hidesDrinkOptions = selectedCategory == ProductCategory.ADD_ONS || selectedCategory == ProductCategory.MERCHANDISE
     var temperature by remember(editingProduct) { mutableStateOf(editingProduct?.temperature ?: "HOT") }
     var description by remember(editingProduct) { mutableStateOf(editingProduct?.description ?: "") }
     var isActive by remember(editingProduct) { mutableStateOf(editingProduct?.isActive ?: true) }
@@ -2311,42 +2346,43 @@ private fun AddProductScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Type
-                    FormFieldLabel(
-                        label = "Type",
-                        required = true
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(24.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(
-                                selected = productType == ProductType.DRINK,
-                                onClick = { productType = ProductType.DRINK },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = OrangeAccent,
-                                    unselectedColor = TextMuted
+                    // Type (hidden for Add-Ons & Merchandise — the category determines the type)
+                    if (!hidesDrinkOptions) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FormFieldLabel(
+                            label = "Type",
+                            required = true
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(24.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(
+                                    selected = productType == ProductType.DRINK,
+                                    onClick = { productType = ProductType.DRINK },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = OrangeAccent,
+                                        unselectedColor = TextMuted
+                                    )
                                 )
-                            )
-                            Text("Drink", color = TextWhite, style = MaterialTheme.typography.bodyMedium)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(
-                                selected = productType == ProductType.FOOD,
-                                onClick = { productType = ProductType.FOOD },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = OrangeAccent,
-                                    unselectedColor = TextMuted
+                                Text("Drink", color = TextWhite, style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                RadioButton(
+                                    selected = productType == ProductType.FOOD,
+                                    onClick = { productType = ProductType.FOOD },
+                                    colors = RadioButtonDefaults.colors(
+                                        selectedColor = OrangeAccent,
+                                        unselectedColor = TextMuted
+                                    )
                                 )
-                            )
-                            Text("Food", color = TextWhite, style = MaterialTheme.typography.bodyMedium)
+                                Text("Food", color = TextWhite, style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
 
-                    // Temperature (only for drinks)
-                    if (productType == ProductType.DRINK) {
+                    // Temperature (drinks only — hidden for Add-Ons & Merchandise categories)
+                    if (productType == ProductType.DRINK && !hidesDrinkOptions) {
                         Spacer(modifier = Modifier.height(8.dp))
                         FormFieldLabel(label = "Cup Temperature")
                         Row(
@@ -2469,34 +2505,36 @@ private fun AddProductScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Add-ons
-                    FormFieldLabel(label = "Add-ons")
-                    TextButton(onClick = { showAddOnDialog = true }) {
-                        Text(
-                            text = if (addOns.isEmpty()) "+ Add Add-on" else "Edit Add-ons (${addOns.size})",
-                            color = OrangeAccent,
-                            fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                    if (addOns.isNotEmpty()) {
-                        AddedItemsChips(items = addOns)
-                    } else {
-                        Text(
-                            text = "e.g. Extra Shot, Pearl, Cheese",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextGray,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
-                    }
+                    // Add-ons (hidden for Add-Ons & Merchandise — they don't have sub-add-ons)
+                    if (!hidesDrinkOptions) {
+                        FormFieldLabel(label = "Add-ons")
+                        TextButton(onClick = { showAddOnDialog = true }) {
+                            Text(
+                                text = if (addOns.isEmpty()) "+ Add Add-on" else "Edit Add-ons (${addOns.size})",
+                                color = OrangeAccent,
+                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                        if (addOns.isNotEmpty()) {
+                            AddedItemsChips(items = addOns)
+                        } else {
+                            Text(
+                                text = "e.g. Extra Shot, Pearl, Cheese",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextGray,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
 
-                    // Add-on Dialog
-                    if (showAddOnDialog) {
-                        AddOnSelectionDialog(
-                            selectedAddOns = addOns,
-                            onAddOnsSelected = { addOns = it },
-                            onDismiss = { showAddOnDialog = false }
-                        )
+                        // Add-on Dialog
+                        if (showAddOnDialog) {
+                            AddOnSelectionDialog(
+                                selectedAddOns = addOns,
+                                onAddOnsSelected = { addOns = it },
+                                onDismiss = { showAddOnDialog = false }
+                            )
+                        }
                     }
                 }
             }
@@ -2874,7 +2912,8 @@ private fun AddProductScreen(
                             description = description.ifBlank { null },
                             category = selectedCategory.displayName,
                             type = if (productType == ProductType.DRINK) "DRINK" else "FOOD",
-                            temperature = if (productType == ProductType.DRINK) temperature else "HOT",
+                            // Add-Ons & Merchandise products have no cup temperature (hidden in the form)
+                            temperature = if (productType == ProductType.DRINK && !hidesDrinkOptions) temperature else "HOT",
                             sellingPrice = defaultVariantPrice,
                             costPrice = costPrice.toDoubleOrNull()?.takeIf { it > 0 },
                             isActive = isActive,
@@ -2883,7 +2922,8 @@ private fun AddProductScreen(
                             lowStockThreshold = lowStockThreshold.toIntOrNull() ?: 5,
                             unit = selectedUnit,
                             imagePath = savedImagePath,
-                            addOnsJson = if (addOns.isNotEmpty()) "[${addOns.joinToString(",") { "\"$it\"" }}]" else null
+                            // Add-Ons & Merchandise products never have sub-add-ons (hidden in the form)
+                            addOnsJson = if (!hidesDrinkOptions && addOns.isNotEmpty()) "[${addOns.joinToString(",") { "\"$it\"" }}]" else null
                         )
                         if (isEditing) {
                             onUpdate(entity, variants)

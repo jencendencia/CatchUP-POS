@@ -52,12 +52,22 @@ class CatchUpApp : Application() {
         }
         // Seed sample data asynchronously
         applicationScope.launch {
-            try { productRepository.seedSampleData() } catch (_: Exception) {}
+            try {
+                productRepository.seedSampleData()
+            } catch (_: Exception) {}
+            try {
+                // Fix legacy products where Add-Ons/Merchandise items were stored as type FOOD
+                productRepository.repairProductCategoryTypes()
+            } catch (_: Exception) {}
         }
         // Auto-start KDS server if it was enabled before
         applicationScope.launch {
-            if (kdsSettingsManager.isEnabled) {
-                startKdsServer(kdsSettingsManager.port)
+            try {
+                if (kdsSettingsManager.isEnabled) {
+                    startKdsServer(kdsSettingsManager.port)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to auto-start KDS server: ${e.message}", e)
             }
         }
     }
