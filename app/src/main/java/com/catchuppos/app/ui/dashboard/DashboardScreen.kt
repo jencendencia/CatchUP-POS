@@ -23,6 +23,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.catchuppos.app.CatchUpApp
 import com.catchuppos.app.auth.AuthState
+import com.catchuppos.app.data.CategoryOrderItem
 import com.catchuppos.app.data.PaymentMethodSales
 import com.catchuppos.app.theme.*
 import com.catchuppos.app.update.UpdateChecker
@@ -107,6 +108,7 @@ fun DashboardScreen(
     var showCupsDialog by remember { mutableStateOf(false) }
     var showSalesTodayDialog by remember { mutableStateOf(false) }
     var todayPaymentMethods by remember { mutableStateOf<List<PaymentMethodSales>>(emptyList()) }
+    var todayCategoryOrders by remember { mutableStateOf<List<CategoryOrderItem>>(emptyList()) }
     val isLandscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     val scope = rememberCoroutineScope()
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -128,6 +130,7 @@ fun DashboardScreen(
         hotCupsAvailable = loadCupCount(context, "hot")
         coldCupsAvailable = loadCupCount(context, "cold")
         cupsAvailable = hotCupsAvailable + coldCupsAvailable
+        todayCategoryOrders = repository.getOrderItemsByCategory(getTodayStartMillis(), System.currentTimeMillis())
     }
 
     // Load today's payment-method breakdown when the Sales Today dialog opens
@@ -147,6 +150,7 @@ fun DashboardScreen(
             hotCupsAvailable = loadCupCount(context, "hot")
             coldCupsAvailable = loadCupCount(context, "cold")
             cupsAvailable = hotCupsAvailable + coldCupsAvailable
+            todayCategoryOrders = repository.getOrderItemsByCategory(getTodayStartMillis(), System.currentTimeMillis())
         }
     }
 
@@ -215,9 +219,19 @@ fun DashboardScreen(
 
                             Spacer(modifier = Modifier.height(16.dp))
 
-                            // Empty State (Main Content Display Area)
-                            EmptyState(
-                                onNewOrderClick = { activeNavItem = NavItem.ORDERS }
+                            // Empty State (only shown when there are no orders today)
+                            if (totalOrders == 0) {
+                                EmptyState(
+                                    onNewOrderClick = { activeNavItem = NavItem.ORDERS }
+                                )
+                                Spacer(modifier = Modifier.height(24.dp))
+                            } else {
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+
+                            // Today's Orders by Category
+                            TodayOrdersSection(
+                                categoryOrders = todayCategoryOrders
                             )
 
                             Spacer(modifier = Modifier.height(28.dp))
@@ -332,6 +346,213 @@ private fun getTodayStartMillis(): Long {
         set(Calendar.MILLISECOND, 0)
     }
     return cal.timeInMillis
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Today's Orders by Category (Coffee / Non Coffee / Add-Ons + optional
+// Food, Merchandise, etc. columns that only appear when they have orders)
+// ════════════════════════════════════════════════════════════════════
+
+private val baseOrderCategoryTitles = listOf("Coffee", "Non Coffee", "Add-Ons")
+
+@Composable
+private fun TodayOrdersSection(categoryOrders: List<CategoryOrderItem>) {
+    val grouped = categoryOrders.groupBy { it.category }
+
+    // Always show Coffee / Non Coffee / Add-Ons; append any other category that has orders today
+    val columnTitles = remember(grouped.keys) {
+        val extra = grouped.keys.filter { it !in baseOrderCategoryTitles }.sorted()
+        baseOrderCategoryTitles + extra
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 28.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D))
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            // ── Header ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "TODAY'S ORDERS",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextWhite,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = SimpleDateFormat("MMMM dd, yyyy", Locale.US).format(Date()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted
+                    )
+                }
+                val totalSold = categoryOrders.sumOf { it.totalQty }
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = OrangeAccent.copy(alpha = 0.12f)
+                ) {
+                    Text(
+                        text = "$totalSold item${if (totalSold == 1) "" else "s"} sold",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = OrangeAccent,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // ── Category Columns ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                columnTitles.forEach { category ->
+                    TodayOrdersColumn(
+                        title = category,
+                        items = grouped[category].orEmpty(),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodayOrdersColumn(
+    title: String,
+    items: List<CategoryOrderItem>,
+    modifier: Modifier = Modifier
+) {
+    val accent = categoryAccentColor(title)
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = DarkCard
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // ── Column Header ──
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(accent.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = categoryIcon(title),
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                val columnItemCount = items.sumOf { it.totalQty }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title.uppercase(),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = TextWhite,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "$columnItemCount item${if (columnItemCount == 1) "" else "s"}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextMuted
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(color = DarkBorder, thickness = 0.5.dp)
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // ── Product rows ──
+            if (items.isEmpty()) {
+                Text(
+                    text = "No orders yet",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextGray,
+                    modifier = Modifier.padding(vertical = 10.dp)
+                )
+            } else {
+                items.forEachIndexed { index, item ->
+                    if (index > 0) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = item.productName,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextWhite,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = accent.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "×${item.totalQty}",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = accent,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = DarkBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
+                }
+            }
+        }
+    }
+}
+
+private fun categoryIcon(category: String): androidx.compose.ui.graphics.vector.ImageVector {
+    return when (category.lowercase()) {
+        "coffee" -> Icons.Default.Coffee
+        "non coffee" -> Icons.Default.LocalDrink
+        "add-ons" -> Icons.Default.AddCircle
+        "food" -> Icons.Default.Restaurant
+        "merchandise" -> Icons.Default.ShoppingBag
+        else -> Icons.Default.ShoppingCart
+    }
+}
+
+private fun categoryAccentColor(category: String): Color {
+    return when (category.lowercase()) {
+        "coffee" -> Color(0xFF6D4C41)
+        "non coffee" -> Color(0xFFF48FB1)
+        "add-ons" -> Color(0xFF9C27B0)
+        "food" -> Color(0xFFFF6600)
+        "merchandise" -> Color(0xFF388E3C)
+        else -> OrangeAccent
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════

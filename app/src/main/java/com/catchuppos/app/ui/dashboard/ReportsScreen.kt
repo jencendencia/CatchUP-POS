@@ -95,6 +95,106 @@ fun SmallMetricCard(label: String, value: String, valueColor: Color, modifier: M
 }
 
 // ════════════════════════════════════════════════════════════════════
+// Dine-In / Take-Out Breakdown Card
+// ════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun OrderTypeBreakdownCard(orderTypeCounts: List<OrderTypeSummary>) {
+    val dineIn = orderTypeCounts.firstOrNull { it.orderType.contains("Dine", ignoreCase = true) }
+    val takeOut = orderTypeCounts.firstOrNull { it.orderType.contains("Take", ignoreCase = true) }
+    val dineCount = dineIn?.orderCount ?: 0
+    val takeCount = takeOut?.orderCount ?: 0
+    val totalCount = dineCount + takeCount
+    val dineSales = dineIn?.totalSales ?: 0.0
+    val takeSales = takeOut?.totalSales ?: 0.0
+    val dinePct = if (totalCount > 0) dineCount * 100f / totalCount else 0f
+    val takePct = if (totalCount > 0) takeCount * 100f / totalCount else 0f
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D))
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("DINE-IN / TAKE-OUT", style = MaterialTheme.typography.labelSmall, color = TextMuted, letterSpacing = 1.sp)
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OrderTypeStat(
+                    label = "Dine In",
+                    count = dineCount,
+                    sales = dineSales,
+                    pct = dinePct,
+                    color = OrangeAccent,
+                    modifier = Modifier.weight(1f)
+                )
+                OrderTypeStat(
+                    label = "Take Out",
+                    count = takeCount,
+                    sales = takeSales,
+                    pct = takePct,
+                    color = Color(0xFF2196F3),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrderTypeStat(
+    label: String,
+    count: Int,
+    sales: Double,
+    pct: Float,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = DarkCard
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(color)
+                )
+                Text(label, style = MaterialTheme.typography.labelLarge, color = TextWhite, fontWeight = FontWeight.Bold)
+                Text("(${String.format(Locale.US, "%.0f", pct)}%)", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text("$count order${if (count == 1) "" else "s"}", style = MaterialTheme.typography.titleLarge, color = TextWhite, fontWeight = FontWeight.Bold)
+            Text("₱${String.format(Locale.US, "%,.2f", sales)}", style = MaterialTheme.typography.bodyMedium, color = color, fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(8.dp))
+            // Share bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(DarkBorder)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(pct / 100f)
+                        .height(6.dp)
+                        .background(color, RoundedCornerShape(3.dp))
+                )
+            }
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
 // Daily Sales Bar Chart (Canvas-based)
 // ════════════════════════════════════════════════════════════════════
 
@@ -405,6 +505,7 @@ fun ReportsScreen(
     // State for other tabs
     var dailySales by remember { mutableStateOf<List<DailySalesSummary>>(emptyList()) }
     var orderStatusCounts by remember { mutableStateOf<List<OrderStatusSummary>>(emptyList()) }
+    var orderTypeCounts by remember { mutableStateOf<List<OrderTypeSummary>>(emptyList()) }
     var allProducts by remember { mutableStateOf<List<ProductEntity>>(emptyList()) }
     var cashierPerformance by remember { mutableStateOf<List<CashierSummary>>(emptyList()) }
     var totalProducts by remember { mutableIntStateOf(0) }
@@ -432,6 +533,7 @@ fun ReportsScreen(
         )
         dailySales = repository.getDailySales(startTime, endTime)
         orderStatusCounts = repository.getOrderStatusCounts(startTime, endTime)
+        orderTypeCounts = repository.getOrderTypeCounts(startTime, endTime)
         allProducts = repository.allProductsOnce()
         cashierPerformance = repository.getCashierPerformance(startTime, endTime)
         totalProducts = repository.getProductCount()
@@ -480,7 +582,8 @@ fun ReportsScreen(
                                 recentTransactions = recentTransactions,
                                 orderStatusCounts = orderStatusCounts,
                                 categorySales = categorySales,
-                                cashierPerformance = cashierPerformance
+                                cashierPerformance = cashierPerformance,
+                                orderTypeCounts = orderTypeCounts
                             )
                         }
                         PdfExportHelper.sharePdf(context, fileName, bytes)
@@ -504,6 +607,7 @@ fun ReportsScreen(
                 topProducts = topProducts,
                 paymentMethods = paymentMethods,
                 recentTransactions = recentTransactions,
+                orderTypeCounts = orderTypeCounts,
                 onNavigate = onNavigate,
                 onViewFullReport = { activeSubTab = ReportSubTab.SALES }
             )
@@ -515,6 +619,7 @@ fun ReportsScreen(
             )
             ReportSubTab.ORDERS -> OrdersTabContent(
                 orderStatusCounts = orderStatusCounts,
+                orderTypeCounts = orderTypeCounts,
                 dailySales = dailySales,
                 allTransactions = allTransactionsForPeriod,
                 kpiData = kpiData
@@ -800,6 +905,7 @@ private fun OverviewContent(
     topProducts: List<TopSellingProduct>,
     paymentMethods: List<PaymentMethodSales>,
     recentTransactions: List<TransactionEntity>,
+    orderTypeCounts: List<OrderTypeSummary> = emptyList(),
     onNavigate: (NavItem) -> Unit = {},
     onViewFullReport: () -> Unit = {}
 ) {
@@ -849,6 +955,11 @@ private fun OverviewContent(
             modifier = Modifier.weight(1f)
         )
     }
+
+    Spacer(modifier = Modifier.height(20.dp))
+
+    // ── Dine-In / Take-Out Breakdown ──
+    OrderTypeBreakdownCard(orderTypeCounts = orderTypeCounts)
 
     Spacer(modifier = Modifier.height(20.dp))
 
@@ -1489,6 +1600,7 @@ private fun SalesTabContent(
 @Composable
 private fun OrdersTabContent(
     orderStatusCounts: List<OrderStatusSummary>,
+    orderTypeCounts: List<OrderTypeSummary>,
     dailySales: List<DailySalesSummary>,
     allTransactions: List<TransactionEntity>,
     kpiData: KPIData
@@ -1500,6 +1612,8 @@ private fun OrdersTabContent(
             SmallMetricCard("Avg Items/Order", if (kpiData.totalOrders > 0) String.format(Locale.US, "%.1f", kpiData.totalItemsSold.toDouble() / kpiData.totalOrders) else "0", Color(0xFF2196F3), Modifier.weight(1f))
             SmallMetricCard("Total Sales", "₱${String.format(Locale.US, "%,.2f", kpiData.totalSales)}", StatusGreen, Modifier.weight(1f))
         }
+
+        OrderTypeBreakdownCard(orderTypeCounts = orderTypeCounts)
 
         Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D))) {
             Column(modifier = Modifier.padding(20.dp)) {

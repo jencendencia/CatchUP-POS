@@ -46,7 +46,8 @@ data class CheckoutData(
     val terminal: String = "Terminal 01",
     val cashier: String = "Admin",
     val customerName: String = "Sir Lyme",
-    val paymentMethod: String = "Cash"
+    val paymentMethod: String = "Cash",
+    val orderType: String = "Dine In"
 )
 
 // ════════════════════════════════════════════════════════════════════
@@ -389,6 +390,7 @@ fun CheckoutSuccessScreen(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 
+                ReceiptInfoRow("Order Type", checkoutData.orderType)
                 ReceiptInfoRow("Payment Method", checkoutData.paymentMethod)
                 ReceiptInfoRow("Amount Tendered", "₱${String.format("%.2f", checkoutData.amountTendered)}")
                 ReceiptInfoRow("Change Returned", "₱${String.format("%.2f", checkoutData.changeReturned)}", valueColor = StatusGreen)
@@ -502,12 +504,13 @@ fun formatDateTime(): String {
 @Composable
 fun PaymentDialog(
     total: Double,
-    onConfirm: (Double, String, String) -> Unit,
+    onConfirm: (Double, String, String, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var amountTendered by remember { mutableStateOf("") }
     var customerName by remember { mutableStateOf("") }
     var selectedPaymentMethod by remember { mutableStateOf("Cash") }
+    var selectedOrderType by remember { mutableStateOf("Dine In") }
 
     Dialog(
         onDismissRequest = { },
@@ -525,7 +528,9 @@ fun PaymentDialog(
             tonalElevation = 0.dp
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Header
@@ -565,6 +570,54 @@ fun PaymentDialog(
                             color = OrangeAccent,
                             fontWeight = FontWeight.Bold
                         )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Order Type Selector (Dine In / Take Out)
+                Text(
+                    text = "Order Type",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = TextMuted,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    listOf("Dine In", "Take Out").forEach { orderType ->
+                        val isSelected = selectedOrderType == orderType
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { selectedOrderType = orderType },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) OrangeAccent else DarkCard,
+                            border = if (isSelected) null else BorderStroke(1.dp, DarkBorder)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (orderType == "Dine In") Icons.Default.Restaurant else Icons.Default.ShoppingBag,
+                                    contentDescription = null,
+                                    tint = if (isSelected) TextWhite else TextMuted,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = orderType,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = if (isSelected) TextWhite else TextMuted,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -738,7 +791,7 @@ fun PaymentDialog(
                     }
 
                     Button(
-                        onClick = { onConfirm(tenderedValue, customerName.ifBlank { "Valued Customer" }, selectedPaymentMethod) },
+                        onClick = { onConfirm(tenderedValue, customerName.ifBlank { "Valued Customer" }, selectedPaymentMethod, selectedOrderType) },
                         modifier = Modifier.weight(1f).height(48.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(

@@ -44,7 +44,7 @@ object KdsOrderSerializer {
     ): String {
         val orderId = buildOrderId(transaction.transactionId)
         val timestamp = formatTimestamp(transaction.createdAt)
-        val orderType = determineOrderType(transaction.customerName)
+        val orderType = determineOrderType(transaction.orderType)
 
         return JSONObject().apply {
             put("order_id", orderId)
@@ -106,13 +106,9 @@ object KdsOrderSerializer {
     }
 
     /**
-     * Determine order type based on customer name or other criteria
+     * Map the POS order type to the KDS enum values
      */
-    private fun determineOrderType(customerName: String): String {
-        return when {
-            customerName.contains("Dine In", ignoreCase = true) ||
-                customerName.contains("Dine-in", ignoreCase = true) -> "DINE_IN"
-            else -> "TAKEOUT"
-        }
+    private fun determineOrderType(orderType: String): String {
+        return if (orderType.contains("Dine", ignoreCase = true)) "DINE_IN" else "TAKEOUT"
     }
 }

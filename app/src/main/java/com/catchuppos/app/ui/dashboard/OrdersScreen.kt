@@ -474,7 +474,7 @@ fun OrdersScreen(
     if (showPaymentDialog) {
         PaymentDialog(
             total = subtotal,
-            onConfirm = { amountTendered, customerName, paymentMethod ->
+            onConfirm = { amountTendered, customerName, paymentMethod, orderType ->
                 showPaymentDialog = false
 
                 val itemsSummary = cartItems.joinToString(", ") { "${it.quantity} × ${it.product.title} (${it.size}) @ ₱${String.format("%.2f", it.unitPrice)}" }
@@ -484,6 +484,7 @@ fun OrdersScreen(
                 scope.launch {
                     val transaction = com.catchuppos.app.data.TransactionEntity(
                         customerName = customerName,
+                        orderType = orderType,
                         itemsJson = itemsSummary,
                         itemCount = totalItemCount,
                         total = subtotal,
@@ -538,7 +539,8 @@ fun OrdersScreen(
                     transactionId = generateTransactionId(),
                     dateTime = formatDateTime(),
                     customerName = customerName,
-                    paymentMethod = paymentMethod
+                    paymentMethod = paymentMethod,
+                    orderType = orderType
                 )
             },
             onDismiss = { showPaymentDialog = false }

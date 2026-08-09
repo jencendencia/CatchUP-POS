@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [ProductEntity::class, CategoryEntity::class, TransactionEntity::class, ProductVariantEntity::class, UserEntity::class, OrderItemEntity::class, ExpenseEntity::class],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -104,7 +104,18 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        private val ALL_MIGRATIONS = arrayOf(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+        // Migration 11 → 12: Add order_type column to transactions (Dine In / Take Out)
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE transactions ADD COLUMN order_type TEXT NOT NULL DEFAULT 'Dine In'")
+                // Backfill existing rows to match the old KDS inference (customer name sniffing)
+                db.execSQL(
+                    "UPDATE transactions SET order_type = CASE WHEN customer_name LIKE '%Dine%' THEN 'Dine In' ELSE 'Take Out' END"
+                )
+            }
+        }
+
+        private val ALL_MIGRATIONS = arrayOf(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
 
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {

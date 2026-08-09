@@ -44,6 +44,17 @@ interface OrderItemDao {
         LIMIT 5
     """)
     suspend fun getTopSellingProducts(startTime: Long, endTime: Long): List<TopSellingProduct>
+
+    @Query("""
+        SELECT p.category AS category, oi.product_name AS product_name, SUM(oi.quantity) AS total_qty
+        FROM order_items oi
+        JOIN products p ON oi.product_id = p.id
+        JOIN transactions t ON oi.transaction_id = t.id
+        WHERE t.created_at BETWEEN :startTime AND :endTime
+        GROUP BY p.category, oi.product_name
+        ORDER BY p.category, total_qty DESC
+    """)
+    suspend fun getOrderItemsByCategory(startTime: Long, endTime: Long): List<CategoryOrderItem>
 }
 
 data class ProductSalesSummary(
@@ -60,4 +71,10 @@ data class TopSellingProduct(
     @androidx.room.ColumnInfo(name = "product_name") val productName: String,
     @androidx.room.ColumnInfo(name = "total_qty") val totalQty: Int,
     @androidx.room.ColumnInfo(name = "total_sales") val totalSales: Double
+)
+
+data class CategoryOrderItem(
+    @androidx.room.ColumnInfo(name = "category") val category: String,
+    @androidx.room.ColumnInfo(name = "product_name") val productName: String,
+    @androidx.room.ColumnInfo(name = "total_qty") val totalQty: Int
 )

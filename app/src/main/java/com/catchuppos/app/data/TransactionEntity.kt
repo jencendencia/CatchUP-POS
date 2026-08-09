@@ -12,6 +12,9 @@ data class TransactionEntity(
     @ColumnInfo(name = "customer_name")
     val customerName: String = "Valued Customer",
 
+    @ColumnInfo(name = "order_type")
+    val orderType: String = "Dine In",
+
     @ColumnInfo(name = "items_json")
     val itemsJson: String,
 

@@ -216,6 +216,9 @@ class ProductRepository(
     suspend fun getTopSellingProducts(startTime: Long, endTime: Long): List<TopSellingProduct> =
         orderItemDao.getTopSellingProducts(startTime, endTime)
 
+    suspend fun getOrderItemsByCategory(startTime: Long, endTime: Long): List<CategoryOrderItem> =
+        orderItemDao.getOrderItemsByCategory(startTime, endTime)
+
     suspend fun getSalesByPaymentMethod(startTime: Long, endTime: Long): List<PaymentMethodSales> =
         transactionDao.getSalesByPaymentMethod(startTime, endTime)
 
@@ -248,6 +251,9 @@ class ProductRepository(
 
     suspend fun getOrderStatusCounts(startTime: Long, endTime: Long): List<OrderStatusSummary> =
         transactionDao.getOrderStatusCounts(startTime, endTime)
+
+    suspend fun getOrderTypeCounts(startTime: Long, endTime: Long): List<OrderTypeSummary> =
+        transactionDao.getOrderTypeCounts(startTime, endTime)
 
     suspend fun getCustomerOrderCount(startTime: Long, endTime: Long, customerName: String): Int =
         transactionDao.getCustomerOrderCount(startTime, endTime, customerName)

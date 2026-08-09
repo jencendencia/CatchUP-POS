@@ -103,7 +103,8 @@ object PdfExportHelper {
         recentTransactions: List<TransactionEntity>,
         orderStatusCounts: List<OrderStatusSummary>,
         categorySales: List<CategorySalesSummary>,
-        cashierPerformance: List<CashierSummary>
+        cashierPerformance: List<CashierSummary>,
+        orderTypeCounts: List<OrderTypeSummary> = emptyList()
     ): ByteArray {
         val doc = PdfDocument()
         val w = PdfWriter(doc)
@@ -179,6 +180,17 @@ object PdfExportHelper {
             w.tableHeader(cols)
             orderStatusCounts.forEach { s ->
                 w.tableRow(cols, listOf(s.status, "${s.count}"))
+            }
+        }
+
+        if (orderTypeCounts.isNotEmpty()) {
+            w.section("DINE-IN / TAKE-OUT")
+            val totalOrders = orderTypeCounts.sumOf { it.orderCount }
+            val cols = listOf(Col("ORDER TYPE", 36f, 100f), Col("ORDERS", 140f, 70f), Col("%", 214f, 60f), Col("SALES", 278f, 120f))
+            w.tableHeader(cols)
+            orderTypeCounts.forEach { t ->
+                val pct = if (totalOrders > 0) t.orderCount * 100.0 / totalOrders else 0.0
+                w.tableRow(cols, listOf(t.orderType, "${t.orderCount}", String.format(Locale.US, "%.1f%%", pct), money(t.totalSales)))
             }
         }
 

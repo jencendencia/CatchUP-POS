@@ -116,6 +116,15 @@ interface TransactionDao {
 
     @Query("SELECT COUNT(*) FROM transactions WHERE created_at BETWEEN :startTime AND :endTime AND customer_name = :customerName")
     suspend fun getCustomerOrderCount(startTime: Long, endTime: Long, customerName: String): Int
+
+    @Query("""
+        SELECT order_type as order_type, COUNT(*) as order_count, SUM(total) as total_sales
+        FROM transactions
+        WHERE created_at BETWEEN :startTime AND :endTime
+        GROUP BY order_type
+        ORDER BY total_sales DESC
+    """)
+    suspend fun getOrderTypeCounts(startTime: Long, endTime: Long): List<OrderTypeSummary>
 }
 
 data class PaymentMethodSales(
@@ -154,4 +163,10 @@ data class CashierSummary(
 data class OrderStatusSummary(
     @androidx.room.ColumnInfo(name = "status") val status: String,
     @androidx.room.ColumnInfo(name = "count") val count: Int
+)
+
+data class OrderTypeSummary(
+    @androidx.room.ColumnInfo(name = "order_type") val orderType: String,
+    @androidx.room.ColumnInfo(name = "order_count") val orderCount: Int,
+    @androidx.room.ColumnInfo(name = "total_sales") val totalSales: Double
 )
