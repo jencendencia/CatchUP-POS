@@ -28,6 +28,7 @@ import com.catchuppos.app.CatchUpApp
 import com.catchuppos.app.auth.AuthState
 import com.catchuppos.app.data.UserEntity
 import com.catchuppos.app.data.UserRole
+import com.catchuppos.app.network.ZeroTierState
 import com.catchuppos.app.theme.*
 import com.catchuppos.app.update.UpdateChecker
 import com.catchuppos.app.update.UpdateInfo
@@ -37,6 +38,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 import android.widget.Toast
+import android.content.Context
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -268,6 +270,16 @@ fun SettingsScreen(
             item {
                 Spacer(modifier = Modifier.height(32.dp))
                 KdsServerSection(
+                    app = app,
+                    isAdmin = AuthState.isAdmin
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // ── ZeroTier Remote Access Section ──
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
+                ZeroTierSection(
                     app = app,
                     isAdmin = AuthState.isAdmin
                 )
@@ -994,6 +1006,287 @@ private fun AddEditUserDialog(
             }
         }
     )
+}
+
+// ── ZeroTier Remote Access Section ──
+
+@Composable
+private fun ZeroTierSection(
+    app: com.catchuppos.app.CatchUpApp,
+    isAdmin: Boolean
+) {
+    val context = LocalContext.current
+    val ztManager = app.zeroTierManager
+    val ztSettings = ztManager.getSettings()
+
+    var networkId by remember { mutableStateOf(ztSettings.networkId) }
+    var autoConnect by remember { mutableStateOf(ztSettings.autoConnect) }
+    var ztState by remember { mutableStateOf(ztManager.getState()) }
+    var assignedIp by remember { mutableStateOf(ztSettings.assignedIp) }
+
+    // Observe ZeroTier state changes
+    LaunchedEffect(Unit) {
+        ztManager.onStateChanged = { state ->
+            ztState = state
+        }
+        ztManager.onIpAssigned = { ip ->
+            assignedIp = ip
+            ztSettings.assignedIp = ip
+        }
+        ztManager.onOnlineChanged = { online ->
+            if (!online) {
+                assignedIp = ""
+            }
+        }
+    }
+
+    Text(
+        text = "REMOTE ACCESS (Zerotier)",
+        style = MaterialTheme.typography.labelSmall,
+        color = TextMuted,
+        letterSpacing = 1.5.sp,
+        modifier = Modifier.padding(bottom = 12.dp)
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D))
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Status indicator
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when (ztState) {
+                                    ZeroTierState.CONNECTED -> StatusGreen
+                                    ZeroTierState.STARTING,
+                                    ZeroTierState.JOINING -> Color(0xFFFFC107)
+                                    ZeroTierState.ERROR -> MutedRed
+                                    else -> TextMuted
+                                }
+                            )
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = when (ztState) {
+                            ZeroTierState.STOPPED -> "Not monitoring"
+                            ZeroTierState.STARTING -> "Scanning..."
+                            ZeroTierState.CONNECTED -> "Connected"
+                            ZeroTierState.ERROR -> "Error"
+                            else -> "Waiting..."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextWhite,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                if (isAdmin) {
+                    if (ztState != ZeroTierState.STOPPED) {
+                        OutlinedButton(
+                            onClick = {
+                                ztManager.stop()
+                                ztState = ZeroTierState.STOPPED
+                                assignedIp = ""
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MutedRed),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = Color(0xFF1A1A1A),
+                                contentColor = MutedRed
+                            )
+                        ) {
+                            Text("Stop", fontWeight = FontWeight.SemiBold)
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                ztManager.start(networkId)
+                            },
+                            enabled = networkId.length == 16,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = OrangeAccent,
+                                disabledContainerColor = OrangeAccent.copy(alpha = 0.5f)
+                            )
+                        ) {
+                            Text("Detect ZeroTier", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            // Assigned IP display
+            if (assignedIp.isNotEmpty() && ztState == ZeroTierState.CONNECTED) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(containerColor = StatusGreen.copy(alpha = 0.1f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = null,
+                            tint = StatusGreen,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Virtual IP",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted
+                            )
+                            Text(
+                                text = "$assignedIp:${app.kdsSettingsManager.port}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = StatusGreen,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                val fullAddress = "$assignedIp:${app.kdsSettingsManager.port}"
+                                val clip = android.content.ClipData.newPlainText("ZeroTier Address", fullAddress)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Address copied", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Copy IP",
+                                tint = StatusGreen,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Network ID input
+            OutlinedTextField(
+                value = networkId,
+                onValueChange = {
+                    networkId = it.trim().lowercase()
+                    ztSettings.networkId = networkId
+                },
+                label = { Text("Network ID") },
+                leadingIcon = {
+                    Icon(Icons.Default.NetworkCheck, contentDescription = null, tint = TextMuted)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                enabled = ztState == ZeroTierState.STOPPED,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = OrangeAccent,
+                    unfocusedBorderColor = InputBorder,
+                    cursorColor = OrangeAccent,
+                    focusedLabelColor = OrangeAccent,
+                    unfocusedLabelColor = TextMuted,
+                    focusedTextColor = TextWhite,
+                    unfocusedTextColor = TextWhite,
+                    disabledTextColor = TextMuted
+                ),
+                singleLine = true,
+                supportingText = {
+                    Text(
+                        text = "16-character hex ID from my.zerotier.com",
+                        color = TextMuted,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            )
+
+            // Auto-connect toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Switch(
+                    checked = autoConnect,
+                    onCheckedChange = {
+                        autoConnect = it
+                        ztSettings.autoConnect = it
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = TextWhite,
+                        checkedTrackColor = OrangeAccent,
+                        uncheckedThumbColor = TextMuted,
+                        uncheckedTrackColor = Color(0xFF1A1A1A)
+                    )
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "Auto-detect on startup",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextWhite,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Automatically scan for ZeroTier tunnel",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextMuted
+                    )
+                }
+            }
+
+            // Setup instructions
+            HorizontalDivider(color = DarkBorder)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "Setup Instructions:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextWhite,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "1. Install the ZeroTier app from Play Store",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted
+                )
+                Text(
+                    text = "2. Sign up / sign in and join your network",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted
+                )
+                Text(
+                    text = "3. Authorize this device in my.zerotier.com",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted
+                )
+                Text(
+                    text = "4. Enable the network in the ZeroTier app",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted
+                )
+                Text(
+                    text = "5. Tap 'Detect ZeroTier' above",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted
+                )
+            }
+        }
+    }
 }
 
 // ── Profile Image Save Helper ──

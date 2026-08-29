@@ -7,3 +7,13 @@
 
 # Keep Compose
 -keep class androidx.compose.** { *; }
+
+# Keep ZeroTier SDK classes
+-keep class com.zerotier.sockets.** { *; }
+-dontwarn com.zerotier.sockets.**
+
+# Keep ZeroTier VPN Service
+-keep class com.catchuppos.app.network.ZeroTierVpnService { *; }
+-keep class com.catchuppos.app.network.ZeroTierManager { *; }
+-keep class com.catchuppos.app.network.ZeroTierSettingsManager { *; }
+-keep class com.catchuppos.app.network.ZeroTierApiClient { *; }

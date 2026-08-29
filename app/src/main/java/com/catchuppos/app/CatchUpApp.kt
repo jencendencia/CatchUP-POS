@@ -9,6 +9,8 @@ import com.catchuppos.app.network.KdsNsdHelper
 import com.catchuppos.app.network.KdsOrderSerializer
 import com.catchuppos.app.network.KdsSettingsManager
 import com.catchuppos.app.network.KdsWebSocketServer
+import com.catchuppos.app.network.ZeroTierManager
+import com.catchuppos.app.network.ZeroTierState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,6 +39,10 @@ class CatchUpApp : Application() {
     val kdsNsdHelper: KdsNsdHelper by lazy { KdsNsdHelper(this) }
     var kdsServer: KdsWebSocketServer? = null
         private set
+    private var httpDashboard: com.catchuppos.app.network.HttpDashboardServer? = null
+
+    // ZeroTier embedded VPN manager
+    val zeroTierManager: ZeroTierManager by lazy { ZeroTierManager(this) }
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -70,15 +76,47 @@ class CatchUpApp : Application() {
                 Log.e(TAG, "Failed to auto-start KDS server: ${e.message}", e)
             }
         }
+
+        // Auto-connect ZeroTier if configured
+        applicationScope.launch {
+            try {
+                val ztSettings = zeroTierManager.getSettings()
+                if (ztSettings.autoConnect && ztSettings.isNetworkConfigured()) {
+                    Log.i(TAG, "Auto-connecting ZeroTier to network: ${ztSettings.networkId}")
+                    connectZeroTier(ztSettings.networkId)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to auto-connect ZeroTier: ${e.message}")
+            }
+        }
+
+        // When ZeroTier IP is detected, auto-start/restart KDS server on that IP
+        zeroTierManager.onIpAssigned = { ip ->
+            applicationScope.launch {
+                Log.i(TAG, "ZeroTier IP detected: $ip — auto-starting KDS server")
+                // Always start KDS on ZeroTier IP so remote access works
+                startKdsServer(kdsSettingsManager.port, ip)
+            }
+        }
     }
 
     /**
-     * Start the KDS WebSocket server on the specified port
+     * Start the KDS WebSocket server on the specified port.
+     * Binds to ZeroTier virtual IP if connected, otherwise all interfaces.
+     *
+     * @param port Port number to listen on
+     * @param bindAddress Optional specific address to bind to. If null, uses ZeroTier IP or 0.0.0.0
      */
-    fun startKdsServer(port: Int) {
+    fun startKdsServer(port: Int, bindAddress: String? = null) {
         stopKdsServer()
         try {
-            val server = KdsWebSocketServer(port)
+            // Determine bind address: explicit > ZeroTier IP > all interfaces
+            val effectiveBind = bindAddress
+                ?: getZeroTierIp()
+                ?: "0.0.0.0"
+            Log.i(TAG, "Starting KDS server on $effectiveBind:$port")
+
+            val server = KdsWebSocketServer(port, effectiveBind)
 
             // Wire up the callback for order status updates from KDS clients
             server.onOrderStatusUpdate = { orderId, newStatus, terminalId ->
@@ -97,6 +135,23 @@ class CatchUpApp : Application() {
             server.start()
             kdsServer = server
             kdsSettingsManager.isEnabled = true
+
+            // Start HTTP dashboard on port+1 for browser access
+            try {
+                httpDashboard?.stop()
+                httpDashboard = com.catchuppos.app.network.HttpDashboardServer(
+                    bindAddress = effectiveBind,
+                    httpPort = port + 1
+                ) {
+                    kotlinx.coroutines.runBlocking {
+                        buildDashboardData(effectiveBind, port + 1, port)
+                    }
+                }
+                httpDashboard?.start()
+                Log.i(TAG, "HTTP dashboard started on $effectiveBind:${port + 1}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start HTTP dashboard: ${e.message}")
+            }
             kdsSettingsManager.port = port
 
             // Register NSD service so companion apps can discover this POS automatically
@@ -201,6 +256,8 @@ class CatchUpApp : Application() {
         kdsNsdHelper.unregisterService()
 
         try {
+            httpDashboard?.stop()
+            httpDashboard = null
             kdsServer?.stop(1000)
             kdsServer = null
             kdsSettingsManager.isEnabled = false
@@ -224,8 +281,145 @@ class CatchUpApp : Application() {
         kdsServer?.broadcastOrder(orderJson)
     }
 
+    // ── ZeroTier Remote Access ────────────────────────────────────
+
+    /**
+     * Connect to ZeroTier network and join it.
+     * On success, the POS becomes reachable at its virtual IP.
+     *
+     * @param networkId ZeroTier network ID (16 hex characters)
+     */
+    fun connectZeroTier(networkId: String) {
+        applicationScope.launch {
+            try {
+                zeroTierManager.start(networkId)
+                Log.i(TAG, "ZeroTier connect initiated for network: $networkId")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to connect ZeroTier: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Disconnect from ZeroTier
+     */
+    fun disconnectZeroTier() {
+        zeroTierManager.stop()
+    }
+
+    /**
+     * Get the current ZeroTier connection status
+     */
+    fun getZeroTierState(): ZeroTierState {
+        return zeroTierManager.getState()
+    }
+
+    /**
+     * Get the virtual IP address assigned by ZeroTier
+     */
+    fun getZeroTierIp(): String? {
+        return zeroTierManager.getAssignedIp()
+    }
+
+    /**
+     * Build dashboard data from the database. Called on each HTTP request.
+     */
+    private suspend fun buildDashboardData(ztIp: String, httpPort: Int, wsPort: Int): com.catchuppos.app.network.DashboardData {
+        val startOfDay = java.util.Calendar.getInstance().apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0)
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val endOfDay = startOfDay + 86_400_000
+
+        val todaySales = productRepository.getTodaySales()
+        val todayOrders = productRepository.getTodayOrdersCount()
+        val todayItemsSold = productRepository.getTodayItemsSold()
+        val totalSales = productRepository.getTotalSales()
+        val totalOrders = productRepository.getTransactionCount()
+        val productCount = productRepository.getProductCount()
+
+        // Recent transactions (last 20)
+        val allTxns = productRepository.getAllTransactionsOnce().take(20)
+        val sdf = java.text.SimpleDateFormat("MMM dd, hh:mm a", java.util.Locale.US)
+        val recentTransactions = allTxns.map {
+            com.catchuppos.app.network.TransactionRow(
+                id = it.id,
+                customerName = it.customerName,
+                orderType = it.orderType,
+                total = it.total,
+                paymentMethod = it.paymentMethod,
+                status = it.status,
+                itemCount = it.itemCount,
+                createdAt = sdf.format(java.util.Date(it.createdAt))
+            )
+        }
+
+        // Products by category
+        val allProducts = productRepository.allProductsOnce()
+        val productsByCategory = allProducts
+            .filter { it.isActive }
+            .groupBy { it.category }
+            .mapValues { (_, prods) ->
+                prods.map {
+                    com.catchuppos.app.network.ProductRow(
+                        id = it.id,
+                        title = it.title,
+                        price = it.sellingPrice,
+                        temperature = it.temperature,
+                        stock = it.quantity,
+                        isActive = it.isActive
+                    )
+                }
+            }
+
+        // Top selling products
+        val topProducts = try {
+            productRepository.getTopSellingProducts(startOfDay, endOfDay).take(5).map {
+                com.catchuppos.app.network.TopProductRow(
+                    name = it.productName,
+                    orderCount = it.totalQty,
+                    totalRevenue = it.totalSales
+                )
+            }
+        } catch (_: Exception) { emptyList() }
+
+        // Payment methods
+        val paymentMethods = try {
+            productRepository.getSalesByPaymentMethod(startOfDay, endOfDay).map {
+                com.catchuppos.app.network.PaymentRow(method = it.method, totalSales = it.totalSales)
+            }
+        } catch (_: Exception) { emptyList() }
+
+        // Order statuses
+        val orderStatuses = try {
+            productRepository.getOrderStatusCounts(startOfDay, endOfDay).map {
+                com.catchuppos.app.network.StatusRow(status = it.status, count = it.count)
+            }
+        } catch (_: Exception) { emptyList() }
+
+        return com.catchuppos.app.network.DashboardData(
+            todaySales = todaySales,
+            todayOrders = todayOrders,
+            todayItemsSold = todayItemsSold,
+            totalSales = totalSales,
+            totalOrders = totalOrders,
+            productCount = productCount,
+            recentTransactions = recentTransactions,
+            productsByCategory = productsByCategory,
+            topProducts = topProducts,
+            paymentMethods = paymentMethods,
+            orderStatuses = orderStatuses,
+            ztIp = ztIp,
+            httpPort = httpPort,
+            wsPort = wsPort
+        )
+    }
+
     fun closeDatabase() {
         stopKdsServer()
+        zeroTierManager.stop()
         AppDatabase.closeInstance()
     }
 }

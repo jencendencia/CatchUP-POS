@@ -42,10 +42,21 @@ class KdsSettingsManager(context: Context) {
         }
 
     /**
-     * Get the local device's IP address on the WiFi network.
-     * Falls back gracefully if WiFi is unavailable or permission is missing.
+     * Get the device's IP address for the KDS server to advertise.
+     * Prefers the ZeroTier virtual IP if available, otherwise falls back to WiFi.
      */
     fun getLocalIpAddress(context: Context): String {
+        // Prefer ZeroTier virtual IP if connected
+        try {
+            val app = context.applicationContext as? com.catchuppos.app.CatchUpApp
+            val ztIp = app?.zeroTierManager?.getAssignedIp()
+            if (!ztIp.isNullOrEmpty() && ztIp != "0.0.0.0") {
+                android.util.Log.d("KdsSettings", "Using ZeroTier IP: $ztIp")
+                return ztIp
+            }
+        } catch (_: Exception) {}
+
+        // Fallback to WiFi IP
         return try {
             val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
             val wifiInfo = wifiManager?.connectionInfo
