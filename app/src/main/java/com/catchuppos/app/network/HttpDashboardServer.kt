@@ -209,34 +209,6 @@ class HttpDashboardServer(
             }
         }
 
-        // Build products by category
-        val productSections = d.productsByCategory.entries.joinToString("\n") { (cat, products) ->
-            val emoji = when (cat) {
-                "Coffee" -> "☕"
-                "Non Coffee" -> "🧋"
-                "Food" -> "🛎️"
-                "Add-Ons" -> "+"
-                "Merchandise" -> "🛍️"
-                else -> "📦"
-            }
-            val prodRows = products.joinToString("\n") { p ->
-                val stockColor = if (p.stock <= 0) "#f44336" else if (p.stock <= 5) "#FF9800" else "#4CAF50"
-                """<tr>
-                    <td>${esc(p.title)}</td>
-                    <td style="color:#4CAF50;">₱${fmt(p.price)}</td>
-                    <td>${esc(p.temperature)}</td>
-                    <td style="color:${stockColor};font-weight:600;">${p.stock}</td>
-                </tr>"""
-            }
-            """<div class="category-section">
-                <h3>${emoji} ${esc(cat)} <span class="count">(${products.size})</span></h3>
-                <table>
-                    <thead><tr><th>Product</th><th>Price</th><th>Temp</th><th>Stock</th></tr></thead>
-                    <tbody>${prodRows}</tbody>
-                </table>
-            </div>"""
-        }
-
         // Top products
         val topRows = if (d.topProducts.isEmpty()) {
             """<tr><td colspan="3" style="text-align:center;color:#666;padding:12px;">No data yet</td></tr>"""
@@ -317,10 +289,6 @@ class HttpDashboardServer(
         tr:hover { background: #1a1a1a; }
         .status-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
         .count { color: #666; font-weight: normal; font-size: 14px; }
-        .category-section { padding: 16px 20px; border-bottom: 1px solid #1a1a1a; }
-        .category-section:last-child { border-bottom: none; }
-        .category-section h3 { color: #fff; font-size: 14px; margin-bottom: 10px; }
-        .category-section table { width: 100%; }
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
         @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } .stats-grid { grid-template-columns: repeat(2, 1fr); } }
         .live-dot { display: inline-block; width: 8px; height: 8px; background: #4CAF50; border-radius: 50%; margin-right: 6px; animation: pulse 2s infinite; }
@@ -355,10 +323,7 @@ class HttpDashboardServer(
                 <div class="stat-label">Items Sold Today</div>
                 <div class="stat-value">${d.todayItemsSold}</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Products</div>
-                <div class="stat-value">${d.productCount}</div>
-            </div>
+
             <div class="stat-card green">
                 <div class="stat-label">Total Sales</div>
                 <div class="stat-value">₱${fmt(d.totalSales)}</div>
@@ -408,21 +373,13 @@ class HttpDashboardServer(
         </div>
 
         <!-- Top Products -->
-        <div class="section" style="margin-bottom:24px;">
+        <div class="section">
             <div class="section-header"><h2>🏆 Top Selling Products</h2></div>
             <div class="section-body">
                 <table>
                     <thead><tr><th>Product</th><th>Orders</th><th>Revenue</th></tr></thead>
                     <tbody>${topRows}</tbody>
                 </table>
-            </div>
-        </div>
-
-        <!-- Products by Category -->
-        <div class="section">
-            <div class="section-header"><h2>📦 Menu</h2></div>
-            <div class="section-body">
-                ${productSections.ifEmpty { """<div style="text-align:center;color:#666;padding:30px;">No products</div>""" }}
             </div>
         </div>
     </div>
