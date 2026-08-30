@@ -12,8 +12,8 @@ android {
         applicationId = "com.catchuppos.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 10304
-        versionName = "1.3.4"
+        versionCode = 10305
+        versionName = "1.3.5"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -22,10 +22,10 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            storeFile = file("release-key.jks")
+            storePassword = "joel143"
+            keyAlias = "key0"
+            keyPassword = "joel143"
         }
     }
 
