@@ -115,10 +115,11 @@ class HttpDashboardServer(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "HTTP server failed: ${e.message}")
+                running = false  // Reset so start() can be retried
             }
         }, "HttpDashboardServer")
 
-        thread?.isDaemon = true
+        thread?.isDaemon = false  // Keep alive even when app is backgrounded
         thread?.start()
     }
 
@@ -128,11 +129,18 @@ class HttpDashboardServer(
         serverSocket = null
     }
 
+    /**
+     * Check if the server thread is alive and accepting connections.
+     */
+    fun isRunning(): Boolean = running && thread?.isAlive == true
+
     private fun handleRequest(client: Socket) {
         try {
             val input = client.getInputStream().bufferedReader(StandardCharsets.UTF_8)
             val requestLine = input.readLine() ?: ""
             while (input.readLine()?.isNotEmpty() == true) {}
+
+            Log.d(TAG, "Request: $requestLine from ${client.remoteSocketAddress}")
 
             if (requestLine.startsWith("GET")) {
                 val data = try { dataProvider() } catch (e: Exception) {
@@ -146,6 +154,18 @@ class HttpDashboardServer(
                     "Content-Length: ${body.size}\r\n" +
                     "Connection: close\r\n" +
                     "Access-Control-Allow-Origin: *\r\n" +
+                    "\r\n"
+                client.getOutputStream().use { os ->
+                    os.write(header.toByteArray(StandardCharsets.UTF_8))
+                    os.write(body)
+                    os.flush()
+                }
+            } else {
+                // Always respond so the browser doesn't hang
+                val body = "Not Found".toByteArray(StandardCharsets.UTF_8)
+                val header = "HTTP/1.1 404 Not Found\r\n" +
+                    "Content-Length: ${body.size}\r\n" +
+                    "Connection: close\r\n" +
                     "\r\n"
                 client.getOutputStream().use { os ->
                     os.write(header.toByteArray(StandardCharsets.UTF_8))

@@ -11,6 +11,7 @@ import com.catchuppos.app.network.KdsSettingsManager
 import com.catchuppos.app.network.KdsWebSocketServer
 import com.catchuppos.app.network.ZeroTierManager
 import com.catchuppos.app.network.ZeroTierState
+import com.catchuppos.app.service.NetworkService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -148,11 +149,36 @@ class CatchUpApp : Application() {
                     }
                 }
                 httpDashboard?.start()
-                Log.i(TAG, "HTTP dashboard started on $effectiveBind:${port + 1}")
+                // Verify the server actually started
+                Thread.sleep(500) // Give the thread a moment to bind
+                if (httpDashboard?.isRunning() == true) {
+                    Log.i(TAG, "HTTP dashboard started on $effectiveBind:${port + 1}")
+                } else {
+                    Log.e(TAG, "HTTP dashboard thread died immediately on $effectiveBind:${port + 1}")
+                    // Try fallback: bind to all interfaces
+                    if (effectiveBind != "0.0.0.0") {
+                        Log.i(TAG, "Retrying HTTP dashboard on 0.0.0.0:${port + 1}")
+                        httpDashboard?.stop()
+                        httpDashboard = com.catchuppos.app.network.HttpDashboardServer(
+                            bindAddress = "0.0.0.0",
+                            httpPort = port + 1
+                        ) {
+                            kotlinx.coroutines.runBlocking {
+                                buildDashboardData("0.0.0.0", port + 1, port)
+                            }
+                        }
+                        httpDashboard?.start()
+                        Thread.sleep(500)
+                        Log.i(TAG, "HTTP dashboard retry result: running=${httpDashboard?.isRunning()}")
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start HTTP dashboard: ${e.message}")
             }
             kdsSettingsManager.port = port
+
+            // Start foreground service to keep servers alive when app is backgrounded
+            NetworkService.start(this@CatchUpApp)
 
             // Register NSD service so companion apps can discover this POS automatically
             kdsNsdHelper.registerService(port)
@@ -261,6 +287,7 @@ class CatchUpApp : Application() {
             kdsServer?.stop(1000)
             kdsServer = null
             kdsSettingsManager.isEnabled = false
+            NetworkService.stop(this)
             Log.d(TAG, "KDS server stopped")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping KDS server: ${e.message}", e)

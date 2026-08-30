@@ -1155,7 +1155,7 @@ private fun ZeroTierSection(
                                 color = TextMuted
                             )
                             Text(
-                                text = "$assignedIp:${app.kdsSettingsManager.port}",
+                                text = "$assignedIp:${app.kdsSettingsManager.port + 1}",
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = StatusGreen,
                                 fontWeight = FontWeight.Bold
@@ -1164,7 +1164,7 @@ private fun ZeroTierSection(
                         IconButton(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                val fullAddress = "$assignedIp:${app.kdsSettingsManager.port}"
+                                val fullAddress = "$assignedIp:${app.kdsSettingsManager.port + 1}"
                                 val clip = android.content.ClipData.newPlainText("ZeroTier Address", fullAddress)
                                 clipboard.setPrimaryClip(clip)
                                 Toast.makeText(context, "Address copied", Toast.LENGTH_SHORT).show()

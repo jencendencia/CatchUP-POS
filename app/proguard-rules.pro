@@ -17,3 +17,6 @@
 -keep class com.catchuppos.app.network.ZeroTierManager { *; }
 -keep class com.catchuppos.app.network.ZeroTierSettingsManager { *; }
 -keep class com.catchuppos.app.network.ZeroTierApiClient { *; }
+
+# Keep foreground service
+-keep class com.catchuppos.app.service.NetworkService { *; }
