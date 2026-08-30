@@ -272,8 +272,8 @@ class HttpDashboardServer(
         .header { background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%); padding: 24px 32px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
         .header h1 { color: #FF9800; font-size: 24px; }
         .header .meta { color: #666; font-size: 12px; text-align: right; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 32px; }
+        .container { max-width: 1600px; margin: 0 auto; padding: 24px 32px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 32px; }
         .stat-card { background: #141414; border: 1px solid #222; border-radius: 12px; padding: 20px; text-align: center; }
         .stat-value { font-size: 28px; font-weight: 700; color: #FF9800; margin: 4px 0; }
         .stat-label { color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
@@ -289,8 +289,10 @@ class HttpDashboardServer(
         tr:hover { background: #1a1a1a; }
         .status-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
         .count { color: #666; font-weight: normal; font-size: 14px; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-        @media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+        .main-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
+        .side-panels { display: flex; flex-direction: column; gap: 24px; }
+        @media (max-width: 1024px) { .container { padding: 16px; } .stats-grid { grid-template-columns: repeat(3, 1fr); } .main-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 600px) { .header { padding: 16px; flex-direction: column; gap: 8px; text-align: center; } .header .meta { text-align: center; } .container { padding: 12px; } .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; } .stat-value { font-size: 22px; } .stat-card { padding: 14px 10px; } th, td { padding: 8px 10px; font-size: 12px; } }
         .live-dot { display: inline-block; width: 8px; height: 8px; background: #4CAF50; border-radius: 50%; margin-right: 6px; animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
     </style>
@@ -335,7 +337,7 @@ class HttpDashboardServer(
         </div>
 
         <!-- Recent Transactions + Side panels -->
-        <div class="grid-2" style="grid-template-columns: 2fr 1fr;">
+        <div class="main-grid">
             <!-- Recent Transactions -->
             <div class="section">
                 <div class="section-header">
@@ -353,9 +355,9 @@ class HttpDashboardServer(
             </div>
 
             <!-- Side panels -->
-            <div>
+            <div class="side-panels">
                 <!-- Payment Methods -->
-                <div class="section" style="margin-bottom:24px;">
+                <div class="section">
                     <div class="section-header"><h2>💰 Sales by Payment</h2></div>
                     <div class="section-body">
                         <table><tbody>${payRows}</tbody></table>
