@@ -12,8 +12,8 @@ android {
         applicationId = "com.catchuppos.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 10300
-        versionName = "1.3.0"
+        versionCode = 10302
+        versionName = "1.3.2"
 
         vectorDrawables {
             useSupportLibrary = true
