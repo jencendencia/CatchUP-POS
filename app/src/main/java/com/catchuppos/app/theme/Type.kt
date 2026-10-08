@@ -1,6 +1,8 @@
 package com.catchuppos.app.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -112,3 +114,24 @@ val Typography = Typography(
         letterSpacing = 0.5.sp
     )
 )
+
+/**
+ * Automatic text multiplier derived from the current screen width.
+ *
+ * Layouts are built in dp, so a wide tablet stretches cards and rows while sp
+ * text stays phone-sized. [CatchUpTheme] feeds this factor into the font scale
+ * of the app's density, so every font size — theme styles and hard-coded sp
+ * values alike — grows smoothly as the screen gets wider, with no per-Text
+ * tweaking required.
+ */
+@Composable
+fun rememberTextScale(): Float {
+    val widthDp = LocalConfiguration.current.screenWidthDp
+    val baselineWidth = 480   // phone width → no boost
+    val maxTextWidth = 1400   // large tablet → maximum boost
+    return when {
+        widthDp <= baselineWidth -> 1.0f
+        widthDp >= maxTextWidth -> 1.5f
+        else -> 1f + (widthDp - baselineWidth).toFloat() / (maxTextWidth - baselineWidth) * 0.5f
+    }
+}

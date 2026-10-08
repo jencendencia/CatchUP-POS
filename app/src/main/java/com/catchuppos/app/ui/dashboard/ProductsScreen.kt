@@ -361,7 +361,16 @@ fun ProductsScreen(
                             // Product Cards Grid — responsive columns
                             val configuration = LocalConfiguration.current
                             val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-                            val gridColumns = if (isLandscape) 6 else 4
+                            // Large screens use one fewer column so each card is physically bigger.
+                            val gridColumns = when {
+                                !isLandscape -> 4
+                                configuration.screenWidthDp >= 1200 -> 5
+                                else -> 6
+                            }
+                            // key(textScale): rotation does not recreate the activity,
+                            // so rebuild the grid when the font scale changes to force
+                            // card text to re-measure at the new size.
+                            key(rememberTextScale()) {
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 products.chunked(gridColumns).forEach { rowProducts ->
                                     Row(
@@ -394,6 +403,7 @@ fun ProductsScreen(
                                         }
                                     }
                                 }
+                            }
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))
@@ -550,9 +560,11 @@ private fun ProductCard(
     val imageBitmap = remember(product.imagePath) {
         product.imagePath?.let { android.graphics.BitmapFactory.decodeFile(it) }
     }
+    // Card grows with the screen just like the text inside it does.
+    val cardScale = rememberTextScale()
 
     Card(
-        modifier = modifier.fillMaxWidth().height(200.dp),
+        modifier = modifier.fillMaxWidth().height(200.dp * cardScale),
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
@@ -641,6 +653,8 @@ private fun ProductCard(
                     Text(
                         text = product.title.take(2).uppercase(),
                         style = MaterialTheme.typography.titleSmall.copy(
+                            fontSize = 16.sp,
+                            lineHeight = 20.sp,
                             shadow = Shadow(color = Color.Black, offset = Offset(0f, 2f), blurRadius = 6f)
                         ),
                         color = OrangeAccent,
@@ -649,16 +663,42 @@ private fun ProductCard(
                 }
 
                 // Title
+                // Multi-word names stack word-wrapped (first word on top), and
+                // the size shrinks until no line breaks inside a word.
+                val titleText = remember(product.title) {
+                    val words = product.title.trim().split(Regex("\\s+"))
+                    if (words.size > 1) {
+                        words.first() + "\n" + words.drop(1).joinToString(" ")
+                    } else {
+                        words.first()
+                    }
+                }
+                var titleSize by remember(product.title) { mutableStateOf(15) }
                 Text(
-                    text = product.title,
+                    text = titleText,
                     style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = titleSize.sp,
+                        lineHeight = (titleSize * 1.27f).sp,
                         shadow = Shadow(color = Color.Black, offset = Offset(0f, 2f), blurRadius = 6f)
                     ),
                     color = TextWhite,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    onTextLayout = { result ->
+                        var brokeInsideWord = false
+                        for (line in 0 until result.lineCount - 1) {
+                            val nextStart = result.getLineStart(line + 1)
+                            if (nextStart in 1 until titleText.length) {
+                                val prev = titleText[nextStart - 1]
+                                if (prev != ' ' && prev != '\n') brokeInsideWord = true
+                            }
+                        }
+                        if ((brokeInsideWord || result.hasVisualOverflow) && titleSize > 10) {
+                            titleSize = titleSize - 1
+                        }
+                    }
                 )
 
                 // Description (conditional)
@@ -689,10 +729,13 @@ private fun ProductCard(
                 Text(
                     text = priceText,
                     style = MaterialTheme.typography.labelMedium.copy(
+                        fontSize = 20.sp,
+                        lineHeight = 24.sp,
                         shadow = Shadow(color = Color.Black, offset = Offset(0f, 2f), blurRadius = 6f)
                     ),
                     color = OrangeAccent,
                     fontWeight = FontWeight.Bold,
+                    maxLines = 1,
                     textAlign = TextAlign.Center
                 )
 
@@ -1129,7 +1172,10 @@ private fun CategoryProductsTable(
                                     Column {
                                         Text(
                                             text = row.productTitle,
-                                            style = MaterialTheme.typography.bodyMedium,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontSize = 16.sp,
+                                                lineHeight = 20.sp
+                                            ),
                                             color = TextWhite,
                                             fontWeight = FontWeight.Bold,
                                             maxLines = 1,
@@ -1150,9 +1196,13 @@ private fun CategoryProductsTable(
                                 // PRICE (variant-specific)
                                 Text(
                                     text = "₱${String.format("%.2f", row.sellingPrice)}",
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontSize = 18.sp,
+                                        lineHeight = 22.sp
+                                    ),
                                     color = OrangeAccent,
                                     fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
                                     modifier = Modifier.weight(1f)
                                 )
 

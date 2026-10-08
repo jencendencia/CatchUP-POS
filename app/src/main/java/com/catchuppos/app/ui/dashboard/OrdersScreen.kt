@@ -560,7 +560,12 @@ private fun CategorySection(
 ) {
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    val columns = if (isLandscape) 5 else 3
+    // Large screens use one fewer column so each card is physically bigger.
+    val columns = when {
+        !isLandscape -> 3
+        configuration.screenWidthDp >= 1200 -> 4
+        else -> 5
+    }
 
     Column {
         // Section Header with orange underline
@@ -583,6 +588,10 @@ private fun CategorySection(
         Spacer(modifier = Modifier.height(14.dp))
 
         // Product grid — responsive columns based on orientation
+        // key(textScale): rotation does not recreate the activity
+        // (configChanges), so rebuilding the grid when the screen-width font
+        // scale changes forces card text to re-measure at the new size.
+        key(rememberTextScale()) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             products.chunked(columns).forEach { rowProducts ->
                 Row(
@@ -602,6 +611,7 @@ private fun CategorySection(
                 }
             }
         }
+        }
     }
 }
 
@@ -618,9 +628,11 @@ private fun MenuItemCard(
     val imageBitmap = remember(product.imagePath) {
         product.imagePath?.let { android.graphics.BitmapFactory.decodeFile(it) }
     }
+    // Card grows with the screen just like the text inside it does.
+    val cardScale = rememberTextScale()
 
     Card(
-        modifier = modifier.fillMaxWidth().height(200.dp).clickable { onClick() },
+        modifier = modifier.fillMaxWidth().height(200.dp * cardScale).clickable { onClick() },
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
@@ -664,6 +676,8 @@ private fun MenuItemCard(
                     Text(
                         text = product.title.take(2).uppercase(),
                         style = MaterialTheme.typography.titleSmall.copy(
+                            fontSize = 16.sp,
+                            lineHeight = 20.sp,
                             shadow = Shadow(color = Color.Black, offset = Offset(0f, 2f), blurRadius = 6f)
                         ),
                         color = OrangeAccent,
@@ -672,16 +686,43 @@ private fun MenuItemCard(
                 }
 
                 // Title (uppercase)
+                // Multi-word names stack word-wrapped (first word on top), and
+                // the size shrinks until no line breaks inside a word, so a
+                // name like CAPPUCCINO never renders as CAPPUCCIN / O.
+                val titleText = remember(product.title) {
+                    val words = product.title.uppercase().trim().split(Regex("\\s+"))
+                    if (words.size > 1) {
+                        words.first() + "\n" + words.drop(1).joinToString(" ")
+                    } else {
+                        words.first()
+                    }
+                }
+                var titleSize by remember(product.title) { mutableStateOf(15) }
                 Text(
-                    text = product.title.uppercase(),
+                    text = titleText,
                     style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = titleSize.sp,
+                        lineHeight = (titleSize * 1.27f).sp,
                         shadow = Shadow(color = Color.Black, offset = Offset(0f, 2f), blurRadius = 6f)
                     ),
                     color = TextWhite,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    onTextLayout = { result ->
+                        var brokeInsideWord = false
+                        for (line in 0 until result.lineCount - 1) {
+                            val nextStart = result.getLineStart(line + 1)
+                            if (nextStart in 1 until titleText.length) {
+                                val prev = titleText[nextStart - 1]
+                                if (prev != ' ' && prev != '\n') brokeInsideWord = true
+                            }
+                        }
+                        if ((brokeInsideWord || result.hasVisualOverflow) && titleSize > 10) {
+                            titleSize = titleSize - 1
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(2.dp))
@@ -690,10 +731,13 @@ private fun MenuItemCard(
                 Text(
                     text = "₱${String.format("%.0f", product.sellingPrice)}.00",
                     style = MaterialTheme.typography.labelMedium.copy(
+                        fontSize = 22.sp,
+                        lineHeight = 26.sp,
                         shadow = Shadow(color = Color.Black, offset = Offset(0f, 2f), blurRadius = 6f)
                     ),
                     color = OrangeAccent,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
                 )
             }
         }
@@ -1587,9 +1631,13 @@ private fun ItemCustomizationSheet(
                 // Price
                 Text(
                     text = "₱${String.format("%.2f", currentPrice)}",
-                    style = MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontSize = 30.sp,
+                        lineHeight = 36.sp
+                    ),
                     color = OrangeAccent,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1901,7 +1949,10 @@ private fun CartLineItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.product.title,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 16.sp,
+                    lineHeight = 20.sp
+                ),
                 color = TextWhite,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -1978,9 +2029,13 @@ private fun CartLineItem(
                 // Price
                 Text(
                     text = "₱${String.format("%.2f", item.unitPrice * item.quantity)}",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontSize = 18.sp,
+                        lineHeight = 22.sp
+                    ),
                     color = TextWhite,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
                 )
 
                 Spacer(modifier = Modifier.width(4.dp))

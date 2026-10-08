@@ -310,7 +310,10 @@ fun CheckoutSuccessScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = item.product.title,
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodyMedium.copy(
+                                    fontSize = 16.sp,
+                                    lineHeight = 20.sp
+                                ),
                                 color = TextWhite,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
@@ -330,9 +333,13 @@ fun CheckoutSuccessScreen(
                         )
                         Text(
                             text = "₱${String.format("%.2f", item.unitPrice * item.quantity)}",
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = 17.sp,
+                                lineHeight = 21.sp
+                            ),
                             color = TextWhite,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
                         )
                     }
                 }
@@ -370,7 +377,10 @@ fun CheckoutSuccessScreen(
                     )
                     Text(
                         text = "₱${String.format("%.2f", checkoutData.total)}",
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontSize = 22.sp,
+                            lineHeight = 28.sp
+                        ),
                         color = OrangeAccent,
                         fontWeight = FontWeight.Bold
                     )

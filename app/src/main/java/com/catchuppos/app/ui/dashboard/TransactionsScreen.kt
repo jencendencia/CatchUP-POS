@@ -705,13 +705,12 @@ private fun TransactionDetailDialog(
         Surface(
             modifier = Modifier
                 .widthIn(min = 420.dp, max = 520.dp)
-                .wrapContentHeight()
-                .heightIn(max = 600.dp),
+                .fillMaxHeight(0.85f),
             shape = RoundedCornerShape(20.dp),
             color = Color(0xFF1A1A1A),
             tonalElevation = 0.dp
         ) {
-            Column(modifier = Modifier.padding(24.dp)) {
+            Column(modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
                 // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -888,20 +887,29 @@ private fun TransactionDetailDialog(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = "${item.quantity}x ${item.productName} (${item.size})",
-                                        style = MaterialTheme.typography.bodySmall,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontSize = 14.sp,
+                                            lineHeight = 18.sp
+                                        ),
                                         color = TextWhite
                                     )
                                     Text(
                                         text = "₱${String.format("%.2f", item.unitPrice)} each",
-                                        style = MaterialTheme.typography.bodySmall,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontSize = 14.sp,
+                                            lineHeight = 18.sp
+                                        ),
                                         color = TextGray
                                     )
                                 }
                                 Text(
                                     text = "₱${String.format("%.2f", item.subtotal)}",
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontSize = 17.sp,
+                                        lineHeight = 21.sp
+                                    ),
                                     color = OrangeAccent,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
