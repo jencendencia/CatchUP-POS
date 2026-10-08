@@ -83,15 +83,19 @@ fun KPICardsGrid(
     )
 
     Row(
+        // Row height = tallest card's content (min 130dp), so all four cards
+        // stay equal height while growing with scaled text instead of clipping.
         modifier = modifier
             .fillMaxWidth()
+            .heightIn(min = 130.dp)
+            .height(IntrinsicSize.Min)
             .padding(horizontal = 28.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         cards.forEachIndexed { index, card ->
             KPIStatCard(
                 data = card,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 onClick = if (card.isClickable) {
                     if (card.isSalesToday) onSalesTodayClick else onCupsClick
                 } else null
@@ -108,7 +112,7 @@ private fun KPIStatCard(
 ) {
     Card(
         modifier = modifier
-            .height(130.dp)
+            .heightIn(min = 130.dp)
             .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0D0D0D)),

@@ -309,7 +309,7 @@ fun SettingsScreen(
                         OutlinedButton(
                             onClick = { checkForUpdate() },
                             enabled = !checkingUpdate,
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                             shape = RoundedCornerShape(12.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
                             colors = ButtonDefaults.outlinedButtonColors(
@@ -385,7 +385,7 @@ fun SettingsScreen(
                                     val fileName = "catchup_pos_backup_${dateFormat.format(Date())}.zip"
                                     backupLauncher.launch(fileName)
                                 },
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
                                 colors = ButtonDefaults.outlinedButtonColors(
@@ -425,7 +425,7 @@ fun SettingsScreen(
                                 onClick = {
                                     restoreLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
                                 },
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
                                 colors = ButtonDefaults.outlinedButtonColors(
